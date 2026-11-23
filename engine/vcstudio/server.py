@@ -324,10 +324,52 @@ def emoji(r: EmojiReq):
     return fx.emoji(r.char, Path(r.out))
 
 
+class KeyframeReq(BaseModel):
+    plate: str
+    actors: list[dict]
+    width: int
+    height: int
+    out: str
+
+
+class ShotsReq(BaseModel):
+    shots: list[dict]
+
+
+class SyncReq(BaseModel):
+    jobs: list[dict]
+
+
+@app.post("/animate/keyframe", dependencies=[Depends(auth)])
+def anim_keyframe(r: KeyframeReq):
+    from . import animate
+    return animate.keyframe(r.plate, r.actors, (r.width, r.height), r.out)
+
+
+@app.post("/animate/shots", dependencies=[Depends(auth)])
+def anim_shots(r: ShotsReq):
+    from . import animate
+
+    def run(p):
+        gpu.reserve("video")
+        return {"paths": animate.i2v_many(r.shots, progress=p)}
+    return _job("animate", f"Animate {len(r.shots)} shot(s)", run)
+
+
+@app.post("/lipsync", dependencies=[Depends(auth)])
+def lipsync(r: SyncReq):
+    from . import animate
+
+    def run(p):
+        gpu.reserve("lipsync")
+        return {"paths": animate.lipsync_many(r.jobs, progress=p)}
+    return _job("lipsync", f"Lip-sync {len(r.jobs)} line(s)", run)
+
+
 @app.get("/capabilities", dependencies=[Depends(auth)])
 def capabilities():
-    from . import talking as th
-    return {"talking_faces": th.available(), **gpu.status()}
+    from . import talking as th, animate
+    return {"talking_faces": th.available(), "cinematic": animate.lipsync_available(), **gpu.status()}
 
 
 # --------------------------------------------------------------------- live

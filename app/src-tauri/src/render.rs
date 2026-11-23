@@ -149,7 +149,7 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
         std::fs::create_dir_all(dir.join(sub))?;
     }
     let vertical = p.format == "shorts";
-    let total_lines: usize = p.scenes.iter().map(|s| s.lines.len()).sum();
+    let total_lines: usize = p.scenes.iter().map(|s| s.lines.iter().filter(|l| l.is_dialogue()).count()).sum();
     if total_lines == 0 {
         return Err(anyhow!("The story has no lines yet. Write or paste a script first."));
     }
@@ -190,6 +190,9 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
         for li in 0..p.scenes[si].lines.len() {
             check()?;
             let line = p.scenes[si].lines[li].clone();
+            if !line.is_dialogue() {
+                continue;
+            }
             let out = dir.join("audio").join(format!("{}.wav", line.id));
             if line.audio.is_none() || !out.exists() {
                 let voice = p.character(&line.character_id).and_then(|c| c.voice_id.clone());
@@ -298,45 +301,49 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
             &cancelled).await;
     }
 
-    // 6. talking faces --------------------------------------------------------
-    let st = Stage { renders, id, a: 0.49, b: 0.86 };
+    // 6. animation: cinematic shots (LTX-Video + LatentSync) or talking faces ----
     let caps = engine.request("GET", "/capabilities", None).await.unwrap_or_default();
-    if p.talking_faces && caps["talking_faces"].as_bool().unwrap_or(false) {
-        let mut jobs = vec![];
-        let mut idx = vec![];
-        for (si, sc) in p.scenes.iter().enumerate() {
-            for (li, l) in sc.lines.iter().enumerate() {
-                let Some(c) = p.character(&l.character_id) else { continue };
-                if c.is_narrator || l.audio.is_none() {
-                    continue;
+    if p.cinematic && caps["cinematic"].as_bool().unwrap_or(false) {
+        cinematic(engine, renders, id, &mut p, &cancelled, &check).await?;
+    } else {
+        let st = Stage { renders, id, a: 0.49, b: 0.86 };
+        if p.talking_faces && caps["talking_faces"].as_bool().unwrap_or(false) {
+            let mut jobs = vec![];
+            let mut idx = vec![];
+            for (si, sc) in p.scenes.iter().enumerate() {
+                for (li, l) in sc.lines.iter().enumerate() {
+                    let Some(c) = p.character(&l.character_id) else { continue };
+                    if c.is_narrator || l.audio.is_none() || !l.is_dialogue() {
+                        continue;
+                    }
+                    if l.talking_video.as_ref().map(|v| PathBuf::from(v).exists()).unwrap_or(false) {
+                        continue;
+                    }
+                    let Some(face) = &c.face_image else { continue };
+                    let out = dir.join("talk").join(format!("{}.mp4", l.id));
+                    let expr = match l.emotion.to_lowercase().as_str() {
+                        e if e.contains("excit") || e.contains("happy") || e.contains("angry") || e.contains("shout") => 1.3,
+                        e if e.contains("sad") || e.contains("soft") || e.contains("whisper") || e.contains("calm") => 0.85,
+                        _ => 1.05,
+                    };
+                    jobs.push(json!({"image": face, "audio": l.audio, "out": out.to_string_lossy(), "expression": expr}));
+                    idx.push((si, li));
                 }
-                if l.talking_video.as_ref().map(|v| PathBuf::from(v).exists()).unwrap_or(false) {
-                    continue;
-                }
-                let Some(face) = &c.face_image else { continue };
-                let out = dir.join("talk").join(format!("{}.mp4", l.id));
-                let expr = match l.emotion.to_lowercase().as_str() {
-                    e if e.contains("excit") || e.contains("happy") || e.contains("angry") || e.contains("shout") => 1.3,
-                    e if e.contains("sad") || e.contains("soft") || e.contains("whisper") || e.contains("calm") => 0.85,
-                    _ => 1.05,
-                };
-                jobs.push(json!({"image": face, "audio": l.audio, "out": out.to_string_lossy(), "expression": expr}));
-                idx.push((si, li));
             }
-        }
-        if !jobs.is_empty() {
-            let r = engine.run_job("/talking/batch", json!({"jobs": jobs}), |f, m| st.set(f, m), &cancelled).await?;
-            if let Some(paths) = r["paths"].as_array() {
-                for (k, (si, li)) in idx.iter().enumerate() {
-                    if let Some(pth) = paths.get(k).and_then(|v| v.as_str()) {
-                        p.scenes[*si].lines[*li].talking_video = Some(pth.into());
+            if !jobs.is_empty() {
+                let r = engine.run_job("/talking/batch", json!({"jobs": jobs}), |f, m| st.set(f, m), &cancelled).await?;
+                if let Some(paths) = r["paths"].as_array() {
+                    for (k, (si, li)) in idx.iter().enumerate() {
+                        if let Some(pth) = paths.get(k).and_then(|v| v.as_str()) {
+                            p.scenes[*si].lines[*li].talking_video = Some(pth.into());
+                        }
                     }
                 }
+                story::save(&mut p)?;
             }
-            story::save(&mut p)?;
+        } else {
+            st.set(1.0, "Talking faces off - using animated portraits");
         }
-    } else {
-        st.set(1.0, "Talking faces off - using animated portraits");
     }
 
     // 7. character cutouts, emoji stickers, sound effects -------------------------
@@ -452,5 +459,163 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\
     }
     let _ = cmd.output();
     let _ = std::fs::remove_file(ass);
+    Ok(())
+}
+
+
+/// Cinematic mode: compose a keyframe per shot, animate all shots with LTX-Video,
+/// then lip-sync every dialogue shot with LatentSync. Assets are cached per line.
+async fn cinematic(engine: &Engine, renders: &Renders, id: &str, p: &mut Project,
+                   cancelled: &(dyn Fn() -> bool + Sync), check: &(dyn Fn() -> Result<()> + Sync)) -> Result<()> {
+    let dir = p.dir();
+    for sub in ["shots", "keyframes"] {
+        std::fs::create_dir_all(dir.join(sub))?;
+    }
+    let vertical = p.format == "shorts";
+    let (vw, vh) = if vertical { (576i64, 1024i64) } else { (1024i64, 576i64) };
+    let layout = Layout::for_format(&p.format);
+    let k = vw as f64 / layout.w as f64;
+    let presets = engine.request("GET", "/presets", None).await.unwrap_or_default();
+    let look = |c: &story::Character| -> String {
+        if c.look.is_empty() { presets[&c.preset]["face"].as_str().unwrap_or("a Tamil person").to_string() } else { c.look.clone() }
+    };
+
+    // 6a. cutouts for every on-screen character
+    let st = Stage { renders, id, a: 0.49, b: 0.51 };
+    let chars: Vec<story::Character> = p.characters.iter().filter(|c| !c.is_narrator && c.face_image.is_some()).cloned().collect();
+    for (n, c) in chars.iter().enumerate() {
+        check()?;
+        let face = PathBuf::from(c.face_image.as_ref().unwrap());
+        let mask = face.with_file_name(format!("{}_mask.png", c.id));
+        if !mask.exists() {
+            engine.run_job("/matte", json!({"image": face, "out": mask}),
+                |f, _| st.set((n as f64 + f) / chars.len().max(1) as f64, &format!("Cutting out {}", c.name)), cancelled).await?;
+        }
+    }
+
+    // 6b. keyframes (dialogue), establishing shots and insert images
+    let st = Stage { renders, id, a: 0.51, b: 0.55 };
+    struct ShotJob { si: usize, li: Option<usize>, image: PathBuf, prompt: String, seconds: f64, out: PathBuf, seed: u64 }
+    let mut shots: Vec<ShotJob> = vec![];
+    let n_sc = p.scenes.len();
+    for si in 0..n_sc {
+        check()?;
+        let sc = p.scenes[si].clone();
+        st.set(si as f64 / n_sc as f64, &format!("Setting up the shots of scene {} of {}", si + 1, n_sc));
+        let setting = story::plate_prompt(&sc.visual, &sc.title).split(". The place").next().unwrap_or("").to_string();
+        if sc.clip.as_ref().map(|c| !PathBuf::from(c).exists()).unwrap_or(true) {
+            if let Some(img) = sc.image.clone() {
+                shots.push(ShotJob { si, li: None, image: PathBuf::from(img), seconds: 5.0, seed: stable_seed(&sc.id),
+                    prompt: format!("{}. Slow cinematic camera push-in, gentle living motion in the scene (rain, flickering light, swaying leaves, breathing people), 3D animated film, smooth natural motion.", sc.visual),
+                    out: dir.join("shots").join(format!("{}_scene.mp4", sc.id)) });
+            }
+        }
+        let mut dialog_count = 0usize;
+        let mut last_speaker: Option<String> = None;
+        for li in 0..sc.lines.len() {
+            let l = sc.lines[li].clone();
+            if l.kind == "insert" {
+                if l.clip.as_ref().map(|c| PathBuf::from(c).exists()).unwrap_or(false) { continue; }
+                let img = dir.join("keyframes").join(format!("{}.png", l.id));
+                if !img.exists() {
+                    let (w, h) = if vertical { (768, 1344) } else { (1344, 768) };
+                    engine.run_job("/images", json!({"prompt": l.text, "kind": "scene", "style": p.style, "width": w, "height": h,
+                        "seed": stable_seed(&l.id), "out": img}), |_, _| {}, cancelled).await?;
+                }
+                p.scenes[si].lines[li].image = Some(img.to_string_lossy().into());
+                shots.push(ShotJob { si, li: Some(li), image: img, seconds: 3.0, seed: stable_seed(&l.id),
+                    prompt: format!("{}. Subtle cinematic motion, slow push-in, shallow depth of field, 3D animated film, smooth natural motion.", l.text),
+                    out: dir.join("shots").join(format!("{}_insert.mp4", l.id)) });
+                continue;
+            }
+            if !l.is_dialogue() { continue; }
+            let Some(c) = p.character(&l.character_id).cloned() else { continue };
+            if c.is_narrator || c.face_image.is_none() || l.audio.is_none() { dialog_count = 0; continue; }
+            if l.shot_video.as_ref().map(|v| PathBuf::from(v).exists()).unwrap_or(false) {
+                dialog_count += 1;
+                last_speaker = Some(c.id.clone());
+                continue;
+            }
+            let other = |j: usize| sc.lines.get(j).and_then(|x| p.character(&x.character_id))
+                .filter(|x| !x.is_narrator && x.face_image.is_some() && x.id != c.id).cloned();
+            let listener = last_speaker.as_ref().filter(|s| **s != c.id).and_then(|s| p.character(s).cloned())
+                .or_else(|| other(li + 1));
+            let shot = if listener.is_some() && dialog_count % 4 == 0 { video::Shot::TwoShot } else { video::Shot::CloseUp };
+            let idx = chars.iter().position(|x| x.id == c.id).unwrap_or(0);
+            let right = idx % 2 == 1;
+            let mut actors = vec![];
+            if let (video::Shot::TwoShot, Some(lis)) = (shot, &listener) {
+                let (x, y, sz) = video::actor_box(&layout, shot, !right, true);
+                let face = PathBuf::from(lis.face_image.as_ref().unwrap());
+                actors.push(json!({"image": face, "mask": face.with_file_name(format!("{}_mask.png", lis.id)),
+                    "x": (x as f64 * k) as i64, "y": (y as f64 * k) as i64, "size": (sz as f64 * k) as i64, "dim": true}));
+            }
+            let (x, y, sz) = video::actor_box(&layout, shot, right, false);
+            let face = PathBuf::from(c.face_image.as_ref().unwrap());
+            actors.push(json!({"image": face, "mask": face.with_file_name(format!("{}_mask.png", c.id)),
+                "x": (x as f64 * k) as i64, "y": (y as f64 * k) as i64, "size": (sz as f64 * k) as i64}));
+            let plate = sc.plate.clone().or(sc.image.clone()).unwrap_or_default();
+            let kf = dir.join("keyframes").join(format!("{}.png", l.id));
+            engine.request("POST", "/animate/keyframe", Some(json!({"plate": plate, "actors": actors,
+                "width": vw, "height": vh, "out": kf}))).await?;
+            let action = if l.action.is_empty() { "talks with natural, expressive hand gestures".to_string() } else { l.action.clone() };
+            let emotion = if l.emotion.is_empty() { "warm".to_string() } else { l.emotion.to_lowercase() };
+            let listen = match (&listener, shot) {
+                (Some(lis), video::Shot::TwoShot) => format!(" Beside them, {} listens attentively, nodding and reacting.", look(lis)),
+                _ => String::new(),
+            };
+            shots.push(ShotJob { si, li: Some(li), image: kf, seconds: (l.duration + 0.3).min(4.0), seed: stable_seed(&l.id),
+                prompt: format!("{}, {}, speaking in a {} mood while mostly facing the camera: the mouth opens and closes as they talk, natural jaw and lip movement, blinking, gentle head movements, subtle body motion.{} Setting: {}. Only the people already in the picture appear; nobody new enters the frame. Steady camera with a very slow push-in, smooth natural motion, consistent faces, 3D animated film.",
+                    look(&c), action, emotion, listen, setting),
+                out: dir.join("shots").join(format!("{}_raw.mp4", l.id)) });
+            dialog_count += 1;
+            last_speaker = Some(c.id.clone());
+        }
+    }
+    story::save(p)?;
+
+    // 6c. animate every shot in one batch (model loads once)
+    let st = Stage { renders, id, a: 0.55, b: 0.78 };
+    if !shots.is_empty() {
+        check()?;
+        let body: Vec<serde_json::Value> = shots.iter().map(|s| json!({"image": s.image, "prompt": s.prompt,
+            "seconds": s.seconds, "width": vw, "height": vh, "out": s.out, "seed": s.seed})).collect();
+        let r = engine.run_job("/animate/shots", json!({"shots": body}), |f, m| st.set(f, m), cancelled).await?;
+        let paths = r["paths"].as_array().cloned().unwrap_or_default();
+        for (j, s) in shots.iter().enumerate() {
+            let Some(path) = paths.get(j).and_then(|v| v.as_str()) else { continue };
+            match s.li {
+                None => p.scenes[s.si].clip = Some(path.into()),
+                Some(li) => p.scenes[s.si].lines[li].clip = Some(path.into()),
+            }
+        }
+        story::save(p)?;
+    }
+
+    // 6d. lip-sync every dialogue shot to its Tamil line
+    let st = Stage { renders, id, a: 0.78, b: 0.86 };
+    let mut jobs = vec![];
+    let mut idx = vec![];
+    for (si, sc) in p.scenes.iter().enumerate() {
+        for (li, l) in sc.lines.iter().enumerate() {
+            if !l.is_dialogue() || l.shot_video.as_ref().map(|v| PathBuf::from(v).exists()).unwrap_or(false) { continue; }
+            let (Some(clip), Some(audio)) = (&l.clip, &l.audio) else { continue };
+            if !PathBuf::from(clip).exists() { continue; }
+            let out = dir.join("shots").join(format!("{}_sync.mp4", l.id));
+            jobs.push(json!({"video": clip, "audio": audio, "out": out}));
+            idx.push((si, li));
+        }
+    }
+    if !jobs.is_empty() {
+        check()?;
+        let r = engine.run_job("/lipsync", json!({"jobs": jobs}), |f, m| st.set(f, m), cancelled).await?;
+        let paths = r["paths"].as_array().cloned().unwrap_or_default();
+        for (j, (si, li)) in idx.iter().enumerate() {
+            if let Some(pth) = paths.get(j).and_then(|v| v.as_str()) {
+                p.scenes[*si].lines[*li].shot_video = Some(pth.into());
+            }
+        }
+        story::save(p)?;
+    }
     Ok(())
 }

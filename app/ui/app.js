@@ -374,6 +374,8 @@ function renderEditor() {
   setSeg("#edFormat", cur.format);
   setSeg("#edStyle", cur.style);
   $("#edTalking").checked = cur.talking_faces;
+  setSeg("#edAnim", cur.cinematic === false ? "fast" : "cinematic");
+  animHint();
   $("#edSubs").checked = cur.subtitles;
   $("#edMinimax").checked = cur.use_minimax;
   $("#edMusicName").textContent = cur.music ? cur.music.split(/[\\/]/).pop() : "None";
@@ -405,6 +407,14 @@ $$("#edStyle button").forEach((b) => b.addEventListener("click", async () => {
 $("#edTitle").addEventListener("input", (e) => { cur.title = e.target.value; scheduleSave(); });
 $("#edLogline").addEventListener("input", (e) => { cur.logline = e.target.value; scheduleSave(); });
 $("#edTalking").addEventListener("change", (e) => { cur.talking_faces = e.target.checked; scheduleSave(); });
+function animHint() {
+  $("#edAnimHint").textContent = cur.cinematic === false
+    ? "Fast: characters cut out into the scene with lip-synced faces. A 2-minute story renders in about 15–25 minutes."
+    : "Cinematic: every shot is animated (gestures, body and scene motion) and lip-synced. Realistic but slow: about 1–2 minutes per shot.";
+}
+$$("#edAnim button").forEach((b) => b.addEventListener("click", () => {
+  cur.cinematic = b.dataset.v === "cinematic"; setSeg("#edAnim", b.dataset.v); animHint(); scheduleSave();
+}));
 $("#edSubs").addEventListener("change", (e) => { cur.subtitles = e.target.checked; scheduleSave(); });
 $("#edMinimax").addEventListener("change", async (e) => {
   cur.use_minimax = e.target.checked;

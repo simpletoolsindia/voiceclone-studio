@@ -39,6 +39,26 @@ pub struct Line {
     pub duration: f64,
     #[serde(default)]
     pub talking_video: Option<String>,
+    /// "dialogue" (spoken line), "insert" (silent cut-away shot; text = English visual)
+    /// or "question" (on-screen pause-and-guess card for viewers; text = Tamil question)
+    #[serde(default = "d_kind")]
+    pub kind: String,
+    /// What the speaker physically does (English) - drives the animation
+    #[serde(default)]
+    pub action: String,
+    /// Keyframe image / animated clip for this shot
+    #[serde(default)]
+    pub image: Option<String>,
+    #[serde(default)]
+    pub clip: Option<String>,
+    /// Finished cinematic shot for a dialogue line: animated keyframe + lip-sync
+    #[serde(default)]
+    pub shot_video: Option<String>,
+}
+fn d_kind() -> String { "dialogue".into() }
+
+impl Line {
+    pub fn is_dialogue(&self) -> bool { self.kind.is_empty() || self.kind == "dialogue" }
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -83,6 +103,9 @@ pub struct Project {
     pub subtitles: bool,
     #[serde(default = "d_true")]
     pub talking_faces: bool,
+    /// Cinematic mode: every shot is animated (LTX-Video) and lip-synced (LatentSync)
+    #[serde(default = "d_true")]
+    pub cinematic: bool,
     #[serde(default)]
     pub use_minimax: bool,
     #[serde(default)]
@@ -110,7 +133,7 @@ impl Project {
         Project {
             id: new_id(), title: title.into(), logline: String::new(), language: d_lang(),
             format: d_format(), style: d_style(), characters: vec![], scenes: vec![], music: None,
-            music_volume: d_music_vol(), background_image: None, subtitles: true, talking_faces: true,
+            music_volume: d_music_vol(), background_image: None, subtitles: true, talking_faces: true, cinematic: true,
             use_minimax: false, thumbnail_prompt: String::new(), output: None, description: String::new(), updated: now(),
         }
     }
@@ -182,7 +205,7 @@ pub fn parse_script(text: &str, base: Option<&Project>) -> Project {
     let mut p = base.cloned().unwrap_or_else(|| Project::new("Untitled story"));
     p.scenes.clear();
     let mut chars: Vec<Character> = base.map(|b| b.characters.clone()).unwrap_or_default();
-    let line_re = regex::Regex::new(r"^\s*([^:\[\]@#>]{1,40}?)\s*(?:\(([^)]{1,30})\))?\s*[:：]\s*(.+)$").unwrap();
+    let line_re = regex::Regex::new(r"^\s*([^:\[\]@#>*?]{1,40}?)\s*(?:\(([^)]{1,140})\))?\s*[:：]\s*(.+)$").unwrap();
     let find_or_add = |chars: &mut Vec<Character>, name: &str| -> String {
         let key = name.trim();
         if let Some(c) = chars.iter().find(|c| c.name.eq_ignore_ascii_case(key)) {
@@ -226,21 +249,35 @@ pub fn parse_script(text: &str, base: Option<&Project>) -> Project {
             let (title, visual) = inner.split_once('|').unwrap_or((inner, ""));
             p.scenes.push(Scene { id: new_id(), title: title.trim().into(), visual: visual.trim().into(),
                 ..Default::default() });
+        } else if let Some(rest) = l.strip_prefix('*').or_else(|| l.strip_prefix('?')) {
+            // "* close-up of ..." = silent insert shot; "? ..." = viewer question card
+            let kind = if l.starts_with('*') { "insert" } else { "question" };
+            if p.scenes.is_empty() {
+                p.scenes.push(Scene { id: new_id(), title: String::new(), ..Default::default() });
+            }
+            let text = rest.trim().trim_start_matches(|c: char| c == ':' || c.is_whitespace()).to_string();
+            p.scenes.last_mut().unwrap().lines.push(Line {
+                id: new_id(), kind: kind.into(), text, ..Default::default()
+            });
         } else if let Some(cap) = line_re.captures(l) {
             let name = cap.get(1).unwrap().as_str();
             let cid = find_or_add(&mut chars, name);
             if p.scenes.is_empty() {
-                p.scenes.push(Scene { id: new_id(), title: "Scene 1".into(), ..Default::default() });
+                p.scenes.push(Scene { id: new_id(), title: String::new(), ..Default::default() });
             }
+            let paren = cap.get(2).map(|m| m.as_str().trim().to_string()).unwrap_or_default();
+            let (emotion, action) = match paren.split_once('|') {
+                Some((e, a)) => (e.trim().to_string(), a.trim().to_string()),
+                None => (paren, String::new()),
+            };
             p.scenes.last_mut().unwrap().lines.push(Line {
-                id: new_id(), character_id: cid,
-                emotion: cap.get(2).map(|m| m.as_str().trim().to_string()).unwrap_or_default(),
+                id: new_id(), character_id: cid, emotion, action, kind: "dialogue".into(),
                 text: clean_line(cap.get(3).unwrap().as_str()), ..Default::default()
             });
         } else if let Some(sc) = p.scenes.last_mut() {
             // A bare paragraph is narration.
             let cid = find_or_add(&mut chars, "Narrator");
-            sc.lines.push(Line { id: new_id(), character_id: cid, text: l.into(), ..Default::default() });
+            sc.lines.push(Line { id: new_id(), character_id: cid, text: l.into(), kind: "dialogue".into(), ..Default::default() });
         }
     }
     // keep only characters that are used or explicitly declared
@@ -328,10 +365,12 @@ fn schema() -> Value {
                     "visual": {"type": "string"},
                     "lines": {"type": "array", "items": {
                         "type": "object", "additionalProperties": false,
-                        "required": ["speaker", "emotion", "text"],
+                        "required": ["kind", "speaker", "emotion", "action", "text"],
                         "properties": {
+                            "kind": {"type": "string", "enum": ["dialogue", "insert", "question"]},
                             "speaker": {"type": "string"},
                             "emotion": {"type": "string"},
+                            "action": {"type": "string"},
                             "text": {"type": "string"}
                         }}}
                 }}}
@@ -339,24 +378,29 @@ fn schema() -> Value {
     })
 }
 
-const SYSTEM_PROMPT: &str = r#"You are an award-winning Tamil screenwriter who writes viral story videos for a Tamil YouTube channel.
+const SYSTEM_PROMPT: &str = r#"You are an award-winning Tamil screenwriter and animation director who writes viral, heart-warming story videos for a Tamil YouTube channel watched by families and children.
 
-Write in the natural spoken Tamil people use today (Chennai / Tamil Nadu everyday speech), not formal literary Tamil:
-- Use spoken forms: "என்ன பண்ற?", "வா போலாம்", "சூப்பரா இருக்கு", "தெரியல", "இருக்கான்", "சொல்லு டா" — not "செய்கிறாய்", "இருக்கிறான்".
-- Young characters may mix in common English words the way people really talk ("ஓகே", "சூப்பர்", "ப்ளீஸ்", "ஃப்ரெண்ட்ஸ்"), written in Tamil script. Elders speak warmer, traditional colloquial Tamil with proverbs.
-- Short sentences, one or two per line, with natural punctuation (commas, ?, !) so they are easy to speak aloud. Spell numbers out in Tamil words.
-- Every line must be in Tamil script. Never use Latin letters inside "text".
+LANGUAGE - natural spoken Tamil as people talk today (Chennai / Tamil Nadu everyday speech), never formal literary Tamil:
+- Spoken forms: "என்ன பண்ற?", "வா போலாம்", "சூப்பரா இருக்கு", "தெரியல", "இருக்கான்", "சொல்லு டா" - not "செய்கிறாய்", "இருக்கிறான்".
+- Children and young people mix in the English words people really use ("ஓகே", "சூப்பர்", "ப்ளீஸ்", "கேம்", "ஃபோன்"), written in Tamil script. Elders speak warm traditional colloquial Tamil, sometimes a proverb.
+- One or two short sentences per line, natural punctuation (, ? !) so they are easy to speak. Numbers in Tamil words. Only Tamil script inside dialogue "text".
 
-Story craft: a hook in the first 10 seconds, a clear problem, rising emotion, a twist or heart-touching moment, and a satisfying ending with a gentle message. Give each character a distinct way of speaking. Keep it family-friendly.
+SCREENPLAY CRAFT - this matters more than anything:
+- Hook in the first 5 seconds: open on a problem, a funny moment or a mystery - never on a description of the weather.
+- Every main character WANTS something; give the story a clear conflict, rising stakes, a twist or surprise, an emotional climax and a payoff that is set up earlier.
+- SHOW, DON'T TELL: let characters act and react. The narrator only bridges time or sets a mood - at most 1 narrator line per scene, under 20% of all lines.
+- Each scene has a purpose and ends with a turn (something changes). 4 to 6 scenes. Short, punchy exchanges between characters; let them interrupt, joke and react.
+- Include ONE interactive moment for viewers (a riddle, a choice or a "what happens next?") as a line with kind "question": a short Tamil question shown on screen while the video pauses.
+- Use 2 to 4 lines with kind "insert": silent cut-away close-ups that make the story visual (an object, a hand, a reaction, a dramatic moment). For inserts, "text" is an English image description and "speaker" is empty. Inserts must show objects, hands or places only - never people's faces or the whole family (characters only appear in dialogue shots).
+- End on a warm, satisfying moment and a gentle lesson shown through action, never a lecture. Family-friendly; no insults or violence.
 
-Use a narrator (speaker "Narrator") to set scenes and bridge time; most lines should be dialogue.
-
-For each character choose the voice preset that matches their age and gender: man, girl, boy, aunty, uncle, grandpa, grandma, child_boy, child_girl. The Narrator must also appear in "characters" (preset grandma for a cosy storyteller, man for a dramatic one).
-
-"look" (English): a concise visual description of the character for an image generator — age, face, hair, clothing, distinctive features. Keep it identical in spirit across the story.
-"visual" (English): a vivid one-sentence image-generator prompt for the scene background — location, time of day, lighting, mood, Tamil Nadu details. No text or captions in the image.
-"thumbnail_prompt" (English): a dramatic YouTube thumbnail scene with the main characters' expressions.
-"title": a catchy Tamil title. "title_en": its English translation. "logline": one Tamil sentence."#;
+FIELDS:
+- dialogue lines: "speaker" = character name, "emotion" = one English word (happy, excited, surprised, sad, angry, curious, scared, warm, playful, thinking, nostalgic...), "action" = what the speaker physically does while talking, in English, visual and specific ("reaches for the tablet", "points at the photo", "claps her hands"). Actions involve only the speaker and objects - never touching or bringing in other people (each shot shows at most the speaker and one listener).
+- For each character choose the voice preset matching age and gender: man, girl, boy, aunty, uncle, grandpa, grandma, child_boy, child_girl. Include the Narrator in "characters" (man for a dramatic storyteller, grandma for a cosy one) with a preset no other character uses.
+- "look" (English): concise visual description for an image generator - age, face, hair, clothing, one distinctive feature.
+- "visual" (English): one vivid sentence describing the scene's location, time of day, light and mood with Tamil Nadu details. Describe the place; no text in images.
+- "thumbnail_prompt" (English): a dramatic YouTube thumbnail moment with the main characters' expressions.
+- "title": catchy Tamil title. "title_en": English translation. "logline": one Tamil sentence that makes people want to watch."#;
 
 fn user_prompt(r: &WriteRequest) -> String {
     let lines = (r.minutes * 14.0).round().max(8.0) as i64;
@@ -476,6 +520,15 @@ fn from_ai_json(v: &Value) -> Project {
         let mut sc = Scene { id: new_id(), title,
             visual: s["visual"].as_str().unwrap_or("").into(), ..Default::default() };
         for l in s["lines"].as_array().unwrap_or(&empty) {
+            let kind = l["kind"].as_str().unwrap_or("dialogue");
+            if kind == "insert" || kind == "question" {
+                let raw = l["text"].as_str().unwrap_or("").trim().to_string();
+                let text = if kind == "question" { clean_line(&raw) } else { raw };
+                if !text.is_empty() {
+                    sc.lines.push(Line { id: new_id(), kind: kind.into(), text, ..Default::default() });
+                }
+                continue;
+            }
             let speaker = l["speaker"].as_str().unwrap_or("Narrator").trim().to_string();
             let cid = match p.characters.iter().find(|c| c.name.eq_ignore_ascii_case(&speaker)) {
                 Some(c) => c.id.clone(),
@@ -490,8 +543,9 @@ fn from_ai_json(v: &Value) -> Project {
             };
             let text = clean_line(l["text"].as_str().unwrap_or(""));
             if !text.is_empty() {
-                sc.lines.push(Line { id: new_id(), character_id: cid, text,
-                    emotion: l["emotion"].as_str().unwrap_or("").into(), ..Default::default() });
+                sc.lines.push(Line { id: new_id(), character_id: cid, text, kind: "dialogue".into(),
+                    emotion: l["emotion"].as_str().unwrap_or("").into(),
+                    action: l["action"].as_str().filter(|a| mostly_ascii(a)).unwrap_or("").into(), ..Default::default() });
             }
         }
         if !sc.lines.is_empty() {

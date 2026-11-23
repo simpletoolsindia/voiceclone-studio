@@ -8,7 +8,7 @@
 
   Usage:  powershell -ExecutionPolicy Bypass -File setup_engine.ps1 [-TalkingFaces] [-Cpu]
 #>
-param([switch]$TalkingFaces, [switch]$Cpu)
+param([switch]$TalkingFaces, [switch]$Cinematic, [switch]$Cpu)
 $ErrorActionPreference = "Stop"
 $Engine = Split-Path -Parent $PSScriptRoot
 Set-Location $Engine
@@ -93,6 +93,23 @@ if ($TalkingFaces) {
   foreach ($z in @("BFM_Fitting", "hub")) {
     if (-not (Test-Path "$ck\$z")) { Expand-Archive -Force "$ck\$z.zip" $ck }
   }
+}
+
+if ($Cinematic) {
+  Step "Fetching LatentSync (lip-sync for cinematic shots)"
+  if (-not (Test-Path "third_party\LatentSync\.git")) {
+    git clone https://github.com/bytedance/LatentSync.git third_party/LatentSync
+  }
+  git -C third_party/LatentSync checkout -q a229c3948406bc2cf6eaf4873e662e70c6a04746 2>$null
+  Step "Creating lip-sync environment (Python 3.10; needs Visual Studio C++ Build Tools for insightface)"
+  if (-not (Test-Path ".venv-sync\Scripts\python.exe")) { uv venv --python 3.10 .venv-sync }
+  $Ps = Join-Path $Engine ".venv-sync\Scripts\python.exe"
+  uv pip install --python $Ps torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+  uv pip install --python $Ps cython "numpy==1.26.4" setuptools wheel
+  Get-Content third_party\LatentSyncequirements.txt | Where-Object { $_ -notmatch '^(gradio|--extra)' } | Set-Content -Encoding utf8 "$env:TEMPcs_sync_reqs.txt"
+  uv pip install --python $Ps -r "$env:TEMPcs_sync_reqs.txt"
+  if ($LASTEXITCODE -ne 0) { throw "lip-sync packages failed" }
+  & $Py -c "from huggingface_hub import hf_hub_download as d; [d('ByteDance/LatentSync-1.5', f, local_dir=r'third_party\LatentSync\checkpoints') for f in ('latentsync_unet.pt','whisper/tiny.pt')]"
 }
 
 Step "Checking GPU"

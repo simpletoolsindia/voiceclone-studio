@@ -49,6 +49,8 @@ pub struct Actor {
 #[derive(Clone, Copy, PartialEq)]
 pub enum Shot {
     Full,
+    /// a finished full-frame animated shot (cinematic mode) - only captions / emoji on top
+    Clip,
     TwoShot,
     CloseUp,
     Card,
@@ -60,6 +62,8 @@ pub enum SegKind {
     SceneCard { title: String },
     Line,
     EndCard { question: String },
+    /// Pause-and-guess card for viewers: question + 3-2-1 countdown
+    Question { text: String },
 }
 
 #[derive(Clone)]
@@ -88,6 +92,7 @@ pub struct Sfx {
     pub ding: PathBuf,
     pub rain: PathBuf,
     pub night: PathBuf,
+    pub tick: PathBuf,
 }
 
 pub fn ffmpeg() -> String {
@@ -179,7 +184,7 @@ pub fn make_sfx(dir: &Path) -> Result<Sfx> {
     std::fs::create_dir_all(dir)?;
     let s = Sfx {
         whoosh: dir.join("whoosh.wav"), pop: dir.join("pop.wav"), ding: dir.join("ding.wav"),
-        rain: dir.join("rain.wav"), night: dir.join("night.wav"),
+        rain: dir.join("rain.wav"), night: dir.join("night.wav"), tick: dir.join("tick.wav"),
     };
     let make = |out: &Path, graph: &str| -> Result<()> {
         if out.exists() {
@@ -192,6 +197,7 @@ pub fn make_sfx(dir: &Path) -> Result<Sfx> {
     make(&s.ding, "sine=f=1046.5:d=1.2[a];sine=f=1568:d=1.2,volume=0.35[b];[a][b]amix=inputs=2,afade=t=out:st=0.02:d=1.18:curve=exp,volume=0.9")?;
     make(&s.rain, "anoisesrc=d=12:c=brown:a=0.6,lowpass=f=1100[a];anoisesrc=d=12:c=white:a=0.05,highpass=f=3500,lowpass=f=9000[b];[a][b]amix=inputs=2,volume=1.2")?;
     make(&s.night, "sine=f=4300:d=12,volume=0.12,tremolo=f=32:d=1,tremolo=f=0.6:d=0.95[a];anoisesrc=d=12:c=brown:a=0.15,lowpass=f=500[b];[a][b]amix=inputs=2")?;
+    make(&s.tick, "sine=f=1400:d=0.05[a];sine=f=2100:d=0.05,volume=0.4[b];[a][b]amix=inputs=2,afade=t=out:st=0:d=0.05,volume=1.3")?;
     Ok(s)
 }
 
@@ -229,7 +235,7 @@ fn caption_chunks(text: &str, max: usize) -> Vec<String> {
     out
 }
 
-fn actor_box(l: &Layout, shot: Shot, right: bool, listener: bool) -> (i64, i64, i64) {
+pub fn actor_box(l: &Layout, shot: Shot, right: bool, listener: bool) -> (i64, i64, i64) {
     let (w, h) = (l.w as i64, l.h as i64);
     if l.vertical() {
         match (shot, listener) {
@@ -287,6 +293,17 @@ Style: Btn,Segoe UI,{bs},&H00FFFFFF,&H000000FF,&H001A1AE0,&H00000000,-1,0,0,0,10
             s += &format!("Dialogue: 0,0:00:00.15,{end},Title,,0,0,0,,{{\\pos({cx},{cy})\\fad(300,350)\\fs{}\\fscx70\\fscy70\\t(0,350,\\fscx100\\fscy100)}}{}\n",
                 if vertical { 80 } else { 88 }, ass_escape(title));
         }
+        SegKind::Question { text } => {
+            let qy = if vertical { cy - 220 } else { cy - 150 };
+            s += &format!("Dialogue: 0,0:00:00.15,{end},Title,,0,0,0,,{{\\pos({cx},{qy})\\fad(250,250)\\fs{}\\fscx80\\fscy80\\t(0,250,\\fscx100\\fscy100)}}{}\n",
+                if vertical { 70 } else { 76 }, ass_escape(text));
+            // big 3-2-1 countdown, one number per second, each popping in
+            for (k, n) in ["3", "2", "1"].iter().enumerate() {
+                let t0 = 0.8 + k as f64;
+                s += &format!("Dialogue: 1,{},{},Title,,0,0,0,,{{\\pos({cx},{})\\fs{}\\c&H0030D8FF&\\fscx50\\fscy50\\t(0,180,\\fscx110\\fscy110)\\t(180,320,\\fscx100\\fscy100)\\fad(60,150)}}{n}\n",
+                    ass_time(t0), ass_time(t0 + 0.95), cy + 110, if vertical { 220 } else { 200 });
+            }
+        }
         SegKind::EndCard { question } => {
             let qy = if vertical { cy - 260 } else { cy - 190 };
             s += &format!("Dialogue: 0,0:00:00.20,{end},Title,,0,0,0,,{{\\pos({cx},{qy})\\fad(400,300)\\fs{}}}{}\n",
@@ -306,20 +323,7 @@ Style: Btn,Segoe UI,{bs},&H00FFFFFF,&H000000FF,&H001A1AE0,&H00000000,-1,0,0,0,10
                 l.h - 60, if vertical { 34 } else { 30 });
         }
         SegKind::Line => {
-            if let Some(sp) = &seg.speaker {
-                let (nx, ny) = match seg.shot {
-                    Shot::Card => {
-                        let (x, y) = card_pos(l, sp.right);
-                        (x + l.card() as i64 / 2, y + l.card() as i64 + 40)
-                    }
-                    _ => {
-                        let (x, y, sz) = actor_box(l, seg.shot, sp.right, false);
-                        (x + sz / 2, (y + (sz as f64 * 0.06) as i64).max(60))
-                    }
-                };
-                s += &format!("Dialogue: 2,0:00:00.10,{end},Name,,0,0,0,,{{\\pos({nx},{ny})\\3c{}\\fad(200,150)\\fscx60\\fscy60\\t(0,180,\\fscx100\\fscy100)}}{}\n",
-                    sp.accent, ass_escape(&sp.name));
-            }
+            // No name tags: viewers recognise characters from their faces, voices and the story.
             if subtitles && !seg.text.is_empty() {
                 let chunks = caption_chunks(&seg.text, if vertical { 26 } else { 40 });
                 let total: usize = chunks.iter().map(|c| c.chars().count()).sum::<usize>().max(1);
@@ -446,7 +450,8 @@ pub fn render_segment(seg: &Segment, l: &Layout, out: &Path, work: &Path, card: 
     };
     let soft = match (&seg.kind, seg.shot) {
         (SegKind::Title { .. } | SegKind::SceneCard { .. }, _) => ",eq=brightness=-0.12:saturation=0.9,gblur=sigma=3",
-        (SegKind::EndCard { .. }, _) => ",gblur=sigma=16,eq=brightness=-0.22:saturation=0.9",
+        (SegKind::EndCard { .. } | SegKind::Question { .. }, _) => ",gblur=sigma=16,eq=brightness=-0.22:saturation=0.9",
+        (_, Shot::Clip) => "",
         (_, Shot::CloseUp) => ",gblur=sigma=9,eq=brightness=-0.05",
         (_, Shot::TwoShot) => ",gblur=sigma=2.2",
         (_, Shot::Card) => ",gblur=sigma=14,eq=brightness=-0.10:saturation=1.05",
@@ -483,6 +488,16 @@ fade=t=out:st=2.2:d=0.4:alpha=1[emo];[{last}][emo]overlay=x='{ex}+({es}-overlay_
                 last = "e1".into();
             }
         }
+        Shot::Clip => {
+            if let (Some(e), Some(sp)) = (&seg.emoji, &seg.speaker) {
+                let ei = inp.file(&["-loop", "1", "-t", &format!("{d:.3}")], e);
+                let es = if l.vertical() { 190 } else { 170 };
+                let ex = if sp.right { (l.w as f64 * 0.58) as i64 } else { (l.w as f64 * 0.30) as i64 };
+                let ey = (l.h as f64 * 0.10) as i64;
+                g += &format!(r"[{ei}:v]format=rgba,scale=w='{es}*min(1\,max(0.01\,(t-0.25)/0.18))*(1+0.12*sin(t*9)*exp(-2*t))':h=-1:eval=frame,fade=t=out:st=2.2:d=0.4:alpha=1[emo];[{last}][emo]overlay=x='{ex}+({es}-overlay_w)/2':y='{ey}+({es}-overlay_h)/2':enable='between(t,0.25,2.6)':eof_action=pass[e1];");
+                last = "e1".into();
+            }
+        }
         Shot::TwoShot | Shot::CloseUp | Shot::Card if seg.speaker.is_some() => {
             // fallback: rounded face card
             let sp = seg.speaker.as_ref().unwrap();
@@ -503,7 +518,7 @@ fade=t=out:st=2.2:d=0.4:alpha=1[emo];[{last}][emo]overlay=x='{ex}+({es}-overlay_
     }
 
     // ---- camera punch-in on long dialogue lines (visual change every ~4 s)
-    if seg.kind == SegKind::Line && d > 4.5 && seg.shot != Shot::Full {
+    if seg.kind == SegKind::Line && d > 4.5 && seg.shot != Shot::Full && seg.shot != Shot::Clip {
         let m = d * 0.5;
         g += &format!("[{last}]scale=w='{w}*(1+0.06*min(1\\,max(0\\,(t-{m:.2})/0.30)))':h=-2:eval=frame,crop={w}:{h}[pi];", w = l.w, h = l.h);
         last = "pi".into();
@@ -618,6 +633,9 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
     let line_seg = |si: usize, li: usize, motion: u32, shot_hint: Shot, prev: Option<&str>, next: Option<&str>| -> Option<Segment> {
         let sc = &p.scenes[si];
         let l = &sc.lines[li];
+        if !l.is_dialogue() {
+            return None;
+        }
         let c = p.character(&l.character_id)?;
         let audio = l.audio.clone()?;
         let bg = sc.image.clone().map(PathBuf::from).or_else(|| p.background_image.clone().map(PathBuf::from));
@@ -633,13 +651,16 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
         if let (Some(sp), Some(lis)) = (&speaker, listener.as_mut()) {
             lis.right = !sp.right; // characters face each other
         }
+        let cine = l.shot_video.clone().map(PathBuf::from).filter(|v| v.exists());
         let shot = match &speaker {
+            _ if cine.is_some() => Shot::Clip,
             None => Shot::Full,
             Some(a) if a.mask.is_none() => Shot::Card,
             Some(_) => if listener.is_some() { shot_hint } else { Shot::CloseUp },
         };
+        let clip = cine.clone().or_else(|| sc.clip.clone().map(PathBuf::from).filter(|c| c.exists()));
         Some(Segment {
-            shot, background: bg, clip: sc.clip.clone().map(PathBuf::from),
+            shot, background: bg, clip,
             emoji: if speaker.is_some() { emoji_for(&l.emotion, &l.text).and_then(|e| emoji_png(e)) } else { None },
             speaker, listener, audio: Some(PathBuf::from(audio)), duration: l.duration.max(0.6) + pause,
             text: l.text.clone(), ambience: ambience_for(&sc.visual, &sc.title, sfx), motion, ..blank.clone()
@@ -652,6 +673,9 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
         if let Some(mut s) = line_seg(si, li, 0, Shot::CloseUp, None, None) {
             if s.shot == Shot::TwoShot {
                 s.shot = Shot::CloseUp;
+            }
+            if s.shot == Shot::Clip {
+                s.background = None;
             }
             s.listener = None;
             s.fade_out = true;
@@ -685,6 +709,29 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
         let mut last_speaker: Option<String> = None;
         let mut dialog_count = 0usize;
         for li in 0..n {
+            let line = &sc.lines[li];
+            if line.kind == "question" {
+                segs.push(Segment {
+                    kind: SegKind::Question { text: line.text.clone() }, background: bg.clone(), duration: 4.2,
+                    fade_in: true, ambience: amb.clone(),
+                    sfx: vec![(sfx.pop.clone(), 0.1, 0.4), (sfx.tick.clone(), 0.8, 0.6), (sfx.tick.clone(), 1.8, 0.6), (sfx.tick.clone(), 2.8, 0.6)],
+                    chapter: chapter.take(), ..blank.clone()
+                });
+                continue;
+            }
+            if line.kind == "insert" {
+                let clip = line.clip.clone().map(PathBuf::from).filter(|c| c.exists());
+                let img = line.image.clone().map(PathBuf::from).filter(|c| c.exists());
+                if clip.is_some() || img.is_some() {
+                    segs.push(Segment {
+                        kind: SegKind::Line, shot: Shot::Full, clip, background: img.or(bg.clone()), duration: 3.0,
+                        ambience: amb.clone(), sfx: vec![(sfx.whoosh.clone(), 0.0, 0.25)], motion,
+                        chapter: chapter.take(), ..blank.clone()
+                    });
+                    motion += 1;
+                }
+                continue;
+            }
             let speaker_of = |k: usize| sc.lines.get(k).and_then(|l| p.character(&l.character_id))
                 .filter(|c| !c.is_narrator).map(|c| c.id.clone());
             let prev = if li > 0 { speaker_of(li - 1) } else { None }.or(last_speaker.clone());

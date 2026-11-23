@@ -1,25 +1,44 @@
 # பாட்டியின் மந்திரப் பெட்டி
-> ஒரு மழை நாள், ஒரு பழைய பெட்டி, ஒரு குடும்பத்தோட புதிய பழக்கம்.
+> கரண்ட் போன ஒரு மழை ராத்திரி, ஒரே ஒரு டேப்லெட், ரெண்டு குழந்தைகள்... பாட்டியோட மந்திரப் பெட்டி.
 
 @Narrator = man
 @பாட்டி = grandma | kind elderly Tamil grandmother, silver hair in a bun, cotton saree, round glasses, gentle smile
 @கவின் = child_boy | eight year old Tamil boy, short spiky hair, striped t-shirt
-@மீரா = child_girl | seven year old Tamil girl, two braids with ribbons, yellow pavadai dress
+@மீரா = child_girl | six year old Tamil girl, two braids with ribbons, yellow pavadai dress
 @அப்பா = uncle | Tamil father around forty five, thick moustache, casual shirt, warm smile
 
-[Scene: மழை நாள் | cozy Tamil home living room on a rainy evening, warm lamp light, rain on the window, two children on a sofa glued to their phones]
-Narrator: சென்னையில ஒரு மழை நாள் சாயங்காலம். வீட்டுக்குள்ள எல்லாரும் அவங்கவங்க ஃபோன்ல மூழ்கிப் போயிருந்தாங்க.
-பாட்டி (warm): கவின், மீரா! கொஞ்சம் இங்க வாங்களேன். பாட்டி கிட்ட ஒரு சீக்ரெட் இருக்கு.
-கவின் (bored): பாட்டி, ஒரு நிமிஷம். இந்த லெவல் மட்டும் முடிச்சிடறேன்.
-மீரா (curious): சீக்ரெட்டா? என்ன சீக்ரெட் பாட்டி? சொல்லுங்க சொல்லுங்க!
+[Scene: கரண்ட் கட்! | cozy Chennai apartment living room on a stormy night, lightning flashing outside the window, the room lit only by a small oil lamp]
+* Close-up: a smartphone screen showing a one percent battery warning, then the screen goes black, in a dark room on a stormy night
+கவின் (shocked | stares at his dead phone and shakes it): அய்யோ! என் ஃபோன் ஆஃப் ஆயிடுச்சு! கேம் பாதில நிக்குது!
+மீரா (cheeky | hugs her tablet tightly to her chest): என் டேப்லெட்ல இன்னும் சார்ஜ் இருக்கு. ஆனா நான் தர மாட்டேன்!
+கவின் (angry | reaches out to grab the tablet): குடு மீரா! ஒரே ஒரு லெவல் தான்!
+மீரா (upset | pulls the tablet away and shouts toward the door): பாட்டீ! அண்ணா பிடுங்குறான்!
+Narrator: மழை கொட்டுது, கரண்ட் இல்ல, வீட்டுக்குள்ள ஒரே சண்டை. அப்போ தான் பாட்டி ஒரு பழைய பெட்டியோட உள்ள வந்தாங்க.
 
-[Scene: மந்திரப் பெட்டி | an old carved wooden box open on a straw mat, glowing old photographs and letters inside, warm candle light, cosy night]
-Narrator: பாட்டி மெதுவா ஒரு பழைய மரப்பெட்டியைத் திறந்தாங்க. உள்ள பழைய ஃபோட்டோக்களும் கடிதங்களும் இருந்துச்சு.
-பாட்டி (nostalgic): இது உங்க தாத்தா எனக்கு எழுதின முதல் கடிதம். அப்போ ஃபோன் எல்லாம் கிடையாது கண்ணு.
-கவின் (surprised): வாவ்! தாத்தா இவ்வளவு அழகா எழுதுவாரா? இது செம்மையா இருக்கு பாட்டி!
-மீரா (excited): இந்த ஃபோட்டோல இருக்கிறது யாரு? நீங்களா பாட்டி? செம்ம க்யூட்டா இருக்கீங்க!
+[Scene: பாட்டியின் சவால் | grandmother's room lit by an oil lamp, an old carved wooden box with a brass lock on a wooden cot, rain streaming down the window]
+பாட்டி (playful | holds up an old carved wooden box with both hands): சண்டை போதும் கண்ணுங்களா. இந்தப் பெட்டிக்குள்ள ஒரு மந்திரம் இருக்கு.
+மீரா (curious | leans closer with wide eyes): மந்திரமா? உண்மையாவா பாட்டி?
+பாட்டி (mysterious | taps the brass lock with one finger): ஆனா ஒரு கண்டிஷன். ரெண்டு பேரும் சேர்ந்து என் புதிருக்கு பதில் சொன்னா தான் இது திறக்கும்.
+கவின் (excited | rubs his hands together): ஓகே பாட்டி, சொல்லுங்க! நான் ரெடி!
+பாட்டி (smiling | raises one finger as she asks the riddle): கொடுக்கக் கொடுக்கக் குறையாது. பகிர்ந்தா இன்னும் பெருகும். அது என்ன?
+? நீங்களும் யோசிங்க! அது என்னவா இருக்கும்?
+மீரா (thinking | puts a finger on her chin and looks up): ம்ம்... சாக்லேட்டா? இல்ல இல்ல, அது குறைஞ்சிடுமே...
+கவின் (realising | snaps his fingers and smiles): அன்பு! பாட்டி, அது அன்பு தானே?
+மீரா (happy | claps her hands and bounces): அண்ணா சொன்னான், ஆனா க்ளூ நான் தான் குடுத்தேன்!
 
-[Scene: புதிய பழக்கம் | a Tamil family sitting together on the floor of their living room laughing, the rain has stopped, evening sky glowing through the window, warm happy mood]
-அப்பா (laughing): என்ன இங்க ஒரே சிரிப்பு சத்தம்? நானும் சேர்ந்துக்கலாமா?
-பாட்டி (warm): வாப்பா, உட்காரு. ஃபோன் எல்லாம் கொஞ்சம் ஓரமா வச்சிட்டு, நம்ம கதை பேசலாம்.
-Narrator: அன்னைக்கு ராத்திரி யாருமே ஃபோனைத் தொடல. ஏன்னா, உண்மையான மந்திரம் நம்ம குடும்பத்தோட நேரம் தான்.
+[Scene: பெட்டிக்குள் ரகசியம் | the wooden box open on a straw mat, glowing old black-and-white photographs and yellowed letters inside, warm lamp light]
+* Close-up: wrinkled old hands lift a black-and-white photograph of a little boy and a little girl holding an old radio, warm lamp light
+பாட்டி (nostalgic | holds the old photo gently and looks at it): இந்த ஃபோட்டோல இருக்கிற குட்டிப் பையன் யாருன்னு தெரியுமா? உங்க அப்பா தான்.
+கவின் (surprised | laughs and points at the photo): அப்பாவா?! இவ்வளவு குட்டியா?
+பாட்டி (warm | smiles softly): அன்னைக்கு ஒரே ஒரு ரேடியோக்காக அவனும் உங்க அத்தையும் இப்படித் தான் சண்டை போட்டாங்க.
+
+[Scene: அப்பாவின் ரகசியம் | the lamp-lit room, rain softening outside, a torch light at the doorway, the family sitting on the floor]
+அப்பா (laughing | laughs heartily and shakes his head): என்னைப் பத்தி ரகசியம் சொல்றீங்களா அம்மா? அந்த ரேடியோ சண்டைல நான் தான் தோத்தேன்!
+மீரா (giggling | covers her mouth with both hands): அப்பா தோத்தீங்களா? ஹா ஹா!
+அப்பா (gentle | smiles softly and places a hand on his heart): ஆனா அப்புறம் நாங்க ரெண்டு பேரும் சேர்ந்து பாட்டு கேட்டோம். அது தான் எங்க பெஸ்ட் நாள்.
+
+[Scene: புதிய பழக்கம் | the power is back, warm lights glowing in the living room, the family sitting together, a tablet lying forgotten on the sofa]
+* Close-up: a ceiling light flickers back on in a warm living room, a tablet lies forgotten on a cushion, no people
+மீரா (kind | hands the tablet to her brother with a smile): அண்ணா, இந்தா. நீ முதல்ல விளையாடு.
+கவின் (smiling | gently pushes the tablet back to her): வேண்டாம் மீரா. பாட்டி, இன்னொரு புதிர் சொல்லுங்க!
+Narrator: அன்னைக்கு அவங்க கண்டுபிடிச்ச மந்திரம் ரொம்ப சிம்பிள். பகிர்ந்தா தான் சந்தோஷம் பெருகும்.
