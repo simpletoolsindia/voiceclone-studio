@@ -302,6 +302,28 @@ def talking_batch(r: TalkBatchReq):
     return _job("talking", f"Animate {len(r.jobs)} talking face(s)", run)
 
 
+class MatteReq(BaseModel):
+    image: str
+    out: str
+
+
+class EmojiReq(BaseModel):
+    char: str
+    out: str
+
+
+@app.post("/matte", dependencies=[Depends(auth)])
+def matte(r: MatteReq):
+    from . import fx
+    return _job("matte", f"Cut out {Path(r.image).name}", lambda p: fx.matte(r.image, Path(r.out), progress=p))
+
+
+@app.post("/emoji", dependencies=[Depends(auth)])
+def emoji(r: EmojiReq):
+    from . import fx
+    return fx.emoji(r.char, Path(r.out))
+
+
 @app.get("/capabilities", dependencies=[Depends(auth)])
 def capabilities():
     from . import talking as th

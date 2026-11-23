@@ -49,6 +49,9 @@ pub struct Scene {
     pub visual: String,
     #[serde(default)]
     pub image: Option<String>,
+    /// Empty version of the location (no people), used behind character cutouts
+    #[serde(default)]
+    pub plate: Option<String>,
     #[serde(default)]
     pub clip: Option<String>,
     pub lines: Vec<Line>,
@@ -86,6 +89,9 @@ pub struct Project {
     pub thumbnail_prompt: String,
     #[serde(default)]
     pub output: Option<String>,
+    /// YouTube description (chapters, hashtags) written by the last render
+    #[serde(default)]
+    pub description: String,
     #[serde(default)]
     pub updated: u64,
 }
@@ -105,7 +111,7 @@ impl Project {
             id: new_id(), title: title.into(), logline: String::new(), language: d_lang(),
             format: d_format(), style: d_style(), characters: vec![], scenes: vec![], music: None,
             music_volume: d_music_vol(), background_image: None, subtitles: true, talking_faces: true,
-            use_minimax: false, thumbnail_prompt: String::new(), output: None, updated: now(),
+            use_minimax: false, thumbnail_prompt: String::new(), output: None, description: String::new(), updated: now(),
         }
     }
 
@@ -260,6 +266,19 @@ pub fn clean_line(text: &str) -> String {
 fn mostly_ascii(s: &str) -> bool {
     let n = s.chars().count().max(1);
     s.chars().filter(|c| c.is_ascii()).count() * 10 >= n * 8
+}
+
+/// Turn a scene description into an empty-location prompt by dropping the
+/// clauses that mention people (cutout characters are composited on top).
+pub fn plate_prompt(visual: &str, title: &str) -> String {
+    const PEOPLE: [&str; 30] = ["child", "kid", "boy", "girl", "man", "men", "woman", "women", "people", "person",
+        "family", "father", "mother", "grand", "uncle", "aunt", "friend", "farmer", "villager", "crowd", "vendor",
+        "shopkeeper", "student", "teacher", "baby", "couple", "sitting", "standing", "laughing", "talking"];
+    let kept: Vec<&str> = visual.split([',', ';']).map(str::trim)
+        .filter(|c| !c.is_empty() && !PEOPLE.iter().any(|w| c.to_lowercase().contains(w)))
+        .collect();
+    let base = if kept.is_empty() { title.to_string() } else { kept.join(", ") };
+    format!("{base}. The place is completely empty: nobody there, no people, no children, no characters, only the environment")
 }
 
 // ---------------------------------------------------------------- AI writer

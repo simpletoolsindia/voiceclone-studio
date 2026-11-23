@@ -61,6 +61,24 @@ Narrator: சென்னையில ஒரு மழை நாள் சாய
 Unknown names become characters automatically (பாட்டி → grandma, தாத்தா → grandpa, அம்மா → aunty, …).
 See [`examples/`](examples).
 
+## Video style
+
+Built from what retains viewers on story channels (animated captions, a visual change at least every
+~4 s, sparse sound effects, a hook in the first 3 s) and the shift in Tamil AI shorts from plain
+"talking-head" photos to cinematic, in-scene storytelling:
+
+* **Cold open** – the most dramatic line plays first, then the title card.
+* **In-scene characters** – each portrait is cut out (BiRefNet) and placed in an empty version of the
+  location: a *two-shot* with the speaker lip-synced and the listener reacting, then *shot / reverse-shot
+  close-ups*. Narration shows the full painted scene.
+* **Motion everywhere** – Ken Burns camera moves, a punch-in on long lines, breathing listeners.
+* **Karaoke captions** – Tamil subtitles highlight word by word (libass with complex shaping).
+* **Emoji reactions** – strong emotions pop a sticker next to the speaker (😮 😂 ❤️ 🤩 …).
+* **Sound design** – whoosh transitions, a title ding, rain / night ambience from the scene description
+  (procedural, royalty-free), music ducked under voices, −14 LUFS.
+* **End card** – a comment question, a pulsing SUBSCRIBE button, and an AI-content disclosure.
+* **YouTube description** – chapters (from scene timings), characters and hashtags, ready to paste.
+
 ## How it works
 
 ```

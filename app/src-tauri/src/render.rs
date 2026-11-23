@@ -248,6 +248,23 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
         p.scenes[si].image = Some(out.to_string_lossy().into());
         story::save(&mut p)?;
     }
+    // empty background plates for scenes where characters speak on screen
+    let on_screen: Vec<String> = p.characters.iter().filter(|c| !c.is_narrator).map(|c| c.id.clone()).collect();
+    for si in 0..n_sc {
+        check()?;
+        let sc = p.scenes[si].clone();
+        let has_dialogue = sc.lines.iter().any(|l| on_screen.contains(&l.character_id));
+        if !has_dialogue || sc.plate.as_ref().map(|f| PathBuf::from(f).exists()).unwrap_or(false) {
+            continue;
+        }
+        let out = dir.join("scenes").join(format!("{}_plate.png", sc.id));
+        engine.run_job("/images", json!({"prompt": story::plate_prompt(&sc.visual, &sc.title), "kind": "plate",
+            "style": p.style, "width": sw, "height": sh, "seed": stable_seed(&sc.id), "out": out.to_string_lossy()}),
+            |f, _| st.set((si as f64 + f) / n_sc as f64, &format!("Painting empty set for scene {} of {}", si + 1, n_sc)),
+            &cancelled).await?;
+        p.scenes[si].plate = Some(out.to_string_lossy().into());
+        story::save(&mut p)?;
+    }
     // optional cinematic clips (MiniMax H3 API)
     if p.use_minimax && !settings.minimax_api_key.is_empty() {
         let st = Stage { renders, id, a: 0.43, b: 0.47 };
@@ -322,14 +339,48 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
         st.set(1.0, "Talking faces off - using animated portraits");
     }
 
-    // 7. compose ----------------------------------------------------------------
-    let st = Stage { renders, id, a: 0.86, b: 0.97 };
+    // 7. character cutouts, emoji stickers, sound effects -------------------------
+    let st = Stage { renders, id, a: 0.86, b: 0.89 };
+    let need_mask: Vec<(String, String, PathBuf)> = p.characters.iter()
+        .filter(|c| !c.is_narrator)
+        .filter_map(|c| c.face_image.as_ref().map(|f| (c.id.clone(), c.name.clone(), PathBuf::from(f))))
+        .filter(|(cid, _, f)| f.exists() && !f.with_file_name(format!("{cid}_mask.png")).exists())
+        .collect();
+    for (k, (cid, name, face)) in need_mask.iter().enumerate() {
+        check()?;
+        let out = face.with_file_name(format!("{cid}_mask.png"));
+        let r = engine.run_job("/matte", json!({"image": face, "out": out}),
+            |f, _| st.set((k as f64 + f) / need_mask.len().max(1) as f64, &format!("Cutting out {name}")), &cancelled).await;
+        if let Err(e) = r {
+            if e.to_string() == "cancelled" { return Err(e); }
+            renders.update(id, 0.0, &format!("Cutout for {name} failed - using a face card"));
+        }
+    }
+    let assets_dir = crate::paths::data_dir().join("assets");
+    let mut emoji_map: HashMap<String, PathBuf> = HashMap::new();
+    for sc in &p.scenes {
+        for l in &sc.lines {
+            if let Some(e) = video::emoji_for(&l.emotion, &l.text) {
+                if emoji_map.contains_key(e) { continue; }
+                let hex: String = e.chars().map(|c| format!("{:x}", c as u32)).collect::<Vec<_>>().join("-");
+                let out = assets_dir.join("emoji").join(format!("{hex}.png"));
+                if out.exists() || engine.request("POST", "/emoji", Some(json!({"char": e, "out": out}))).await.is_ok() {
+                    emoji_map.insert(e.to_string(), out);
+                }
+            }
+        }
+    }
+    let sfx = video::make_sfx(&assets_dir.join("sfx"))?;
+
+    // 8. compose ----------------------------------------------------------------
+    let st = Stage { renders, id, a: 0.89, b: 0.97 };
     st.set(0.0, "Composing video");
     let layout = Layout::for_format(&p.format);
     let seg_dir = dir.join("segments");
     let assets = video::make_card_assets(&seg_dir, &layout)?;
     let nvenc = video::has_nvenc();
-    let segments = video::plan(&p, 0.30);
+    let segments = video::plan(&p, 0.30, &sfx, &|e: &str| emoji_map.get(e).cloned());
+    let description = video::youtube_description(&p, &segments);
     let n = segments.len();
     let outs: Vec<PathBuf> = (0..n).map(|i| seg_dir.join(format!("seg{i:04}.mp4"))).collect();
     let progress = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -371,10 +422,13 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
     if thumb_bg.exists() {
         let _ = make_thumbnail(&thumb_bg, &p.title, &thumb, vertical);
     }
+    let desc_path = dir.join("description.txt");
+    std::fs::write(&desc_path, &description)?;
     p.output = Some(out.to_string_lossy().into());
+    p.description = description.clone();
     story::save(&mut p)?;
     Ok(json!({"path": out, "thumbnail": if thumb.exists() { Some(thumb) } else { None },
-        "duration": video::audio_duration(&out)}))
+        "description": description, "duration": video::audio_duration(&out)}))
 }
 
 fn make_thumbnail(bg: &std::path::Path, title: &str, out: &std::path::Path, vertical: bool) -> Result<()> {

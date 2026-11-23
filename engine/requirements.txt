@@ -21,6 +21,8 @@ python-dotenv
 resemblyzer
 jiwer
 pillow
+rembg==2.0.67
+onnxruntime
 fastapi
 uvicorn[standard]
 python-multipart

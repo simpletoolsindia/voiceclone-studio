@@ -65,6 +65,8 @@ def build_prompt(prompt: str, style: str, kind: str = "scene") -> str:
         return (f"Head and shoulders portrait of {prompt}, facing the camera, looking directly at the viewer, "
                 f"mouth closed, gentle expression, face centred and well lit, softly blurred Tamil Nadu background, "
                 f"{style_txt}, {QUALITY}")
+    if kind == "plate":
+        return f"{prompt}, {style_txt}, wide background plate, {QUALITY}"
     if kind == "thumbnail":
         return f"{prompt}, dramatic YouTube thumbnail composition, strong emotions, vivid colours, {style_txt}, {QUALITY}"
     return f"{prompt}, {style_txt}, wide establishing shot, {QUALITY}"

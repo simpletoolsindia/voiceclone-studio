@@ -62,16 +62,16 @@ PRESETS: dict[str, dict] = {
         "face": "kind elderly Tamil grandmother in her seventies, silver hair in a bun, cotton saree, nose ring, gentle smile",
     },
     "child_boy": {
-        "f0": (230, 480),
+        "f0": (220, 330),
         "label": "Tamil child (boy)", "label_ta": "சிறுவன்",
-        "instruct": "male, child, high pitch",
+        "instruct": "male, child, moderate pitch",
         "line": "ஐ, பாட்டி! எனக்கு அந்த சிங்கம் கதை தான் வேணும். சிங்கம் எப்படி கர்ஜிக்கும்னு சொல்லுங்க!",
         "face": "adorable seven year old Tamil boy, big curious eyes, short hair, colourful t-shirt",
     },
     "child_girl": {
-        "f0": (250, 520),
+        "f0": (240, 340),
         "label": "Tamil child (girl)", "label_ta": "சிறுமி",
-        "instruct": "female, child, very high pitch",
+        "instruct": "female, teenager, high pitch",
         "line": "அம்மா அம்மா, பாருங்க! நான் ஒரு அழகான பட்டாம்பூச்சி வரைஞ்சிருக்கேன். உங்களுக்கு பிடிச்சிருக்கா?",
         "face": "adorable six year old Tamil girl, two pigtails with ribbons, pavadai dress, bright smile",
     },
@@ -80,11 +80,21 @@ PRESETS: dict[str, dict] = {
 NARRATOR_PRESET = "grandma"   # default storyteller
 
 
-def median_f0(wav: np.ndarray, sr: int) -> float:
+def pitch_stats(wav: np.ndarray, sr: int) -> tuple[float, float]:
+    """(median F0 in Hz, pitch movement in semitones). Movement of 3-6 st sounds
+    lively and natural; < 2 st is monotone/robotic, > 7 st tends to be erratic."""
     import librosa
     w = librosa.resample(wav, orig_sr=sr, target_sr=16000) if sr != 16000 else wav
-    f0 = librosa.pyin(w, fmin=60, fmax=600, sr=16000)[0]
-    return float(np.nanmedian(f0)) if np.any(~np.isnan(f0)) else 0.0
+    f0 = librosa.pyin(w, fmin=60, fmax=700, sr=16000)[0]
+    f0 = f0[~np.isnan(f0)]
+    if f0.size < 10:
+        return 0.0, 0.0
+    med = float(np.median(f0))
+    return med, float(np.std(12 * np.log2(f0 / med)))
+
+
+def median_f0(wav: np.ndarray, sr: int) -> float:
+    return pitch_stats(wav, sr)[0]
 
 
 def _score_take(wav: np.ndarray, sr: int, text: str, f0_range=None) -> float:
@@ -100,13 +110,14 @@ def _score_take(wav: np.ndarray, sr: int, text: str, f0_range=None) -> float:
     exp = len(text) / 14.0            # ~14 Tamil chars per second of natural speech
     if not (0.55 * exp <= dur <= 1.8 * exp):
         return -0.5
-    if f0_range:
-        f0 = median_f0(wav, sr)
-        if not (f0_range[0] <= f0 <= f0_range[1]):
-            return -0.3
+    f0, movement = pitch_stats(wav, sr)
+    if f0_range and not (f0_range[0] <= f0 <= f0_range[1]):
+        return -0.3
     hyp = asr.transcribe(wav, sr, "ta")
     norm = lambda s: "".join(c for c in s if not c.isspace() and c not in ".,!?")
-    return 1.0 - min(1.0, jiwer.cer(norm(text), norm(hyp)))
+    clarity = 1.0 - min(1.0, jiwer.cer(norm(text), norm(hyp)))
+    lively = 0.05 if 3.0 <= movement <= 6.0 else (-0.05 if movement < 2.0 or movement > 7.5 else 0.0)
+    return clarity + lively
 
 
 def build_preset_voice(store, key: str, takes: int = 6, progress: Optional[Callable] = None):

@@ -684,6 +684,7 @@ function showResult() {
   img.onload = () => img.classList.remove("hidden");
   img.src = fileUrl(thumb) + "?t=" + cur.updated;
   $("#resInfo").textContent = (cur.format === "shorts" ? "YouTube Shorts 1080×1920" : "YouTube 1920×1080") + " · H.264 · −14 LUFS";
+  $("#resDesc").value = cur.description || "";
 }
 $("#resSave").addEventListener("click", async () => {
   const dest = await T.dialog.save({ defaultPath: `${cur.title}.mp4`, filters: [{ name: "MP4 video", extensions: ["mp4"] }] });
@@ -695,6 +696,7 @@ $("#resThumbSave").addEventListener("click", async () => {
   if (dest) { await invoke("copy_file", { src, dest }); toast("Thumbnail saved"); }
 });
 $("#resOpen").addEventListener("click", () => T.opener.revealItemInDir(cur.output));
+$("#resDescCopy").addEventListener("click", () => { navigator.clipboard.writeText($("#resDesc").value); toast("Description copied — paste it into YouTube"); });
 
 // ------------------------------------------------------------------ settings
 async function loadSettings() {
