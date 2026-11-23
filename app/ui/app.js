@@ -963,6 +963,72 @@ $("#engRestart").addEventListener("click", async () => { await invoke("engine_re
 $("#engUnload").addEventListener("click", async () => { await api("POST", "/gpu/unload").catch(() => {}); toast("GPU memory will be freed"); });
 $("#engData").addEventListener("click", async () => { const s = await invoke("engine_status"); T.opener.openPath(s.data_dir); });
 
+// ------------------------------------------------------------------ ChatGPT prompt builder
+function buildStoryPrompt(o) {
+  const v = (x, d) => (x && x.trim() ? x.trim() : d);
+  return STORY_PROMPT_TEMPLATE
+    .replace(/^TITLE \/ IDEA  : .*$/m, `TITLE / IDEA  : ${v(o.title, "AI chooses a fresh, catchy title")}`)
+    .replace(/^MY STORY      : .*$/m, `MY STORY      : ${v((o.story || "").replace(/\s+/g, " "), "(empty - invent an original story from the title)")}`)
+    .replace(/^LENGTH        : .*$/m, `LENGTH        : ${o.length}`)
+    .replace(/^AUDIENCE      : .*$/m, `AUDIENCE      : ${o.audience}`)
+    .replace(/^MOOD \/ GENRE  : .*$/m, `MOOD / GENRE  : ${v(o.mood, "AI chooses")}`)
+    .replace(/^SETTING       : .*$/m, `SETTING       : ${v(o.setting, "AI chooses")}`)
+    .replace(/^CHARACTERS    : .*$/m, `CHARACTERS    : ${v(o.characters, "AI chooses")}`)
+    .replace(/^LESSON        : .*$/m, `LESSON        : ${v(o.lesson, "AI chooses")}`);
+}
+// Quick copy: the fixed master template with the user's title and story inserted - never rewritten by an AI.
+$("#qCopy").addEventListener("click", async () => {
+  const title = $("#qTitle").value, story = $("#qStory").value;
+  if (!title.trim() && !story.trim()) return toast("Type a title or your story first", true);
+  await navigator.clipboard.writeText(buildStoryPrompt({ title, story, length: "2 minutes", audience: "children 4–10 and families" }));
+  toast("📋 Prompt copied — paste it into ChatGPT, Claude or Gemini");
+});
+$("#builderOpen").addEventListener("click", async () => {
+  const d = $("#modal");
+  d.classList.add("wide");
+  const html = `
+    <div class="builder-steps">
+      <div><b>1 · Describe</b>Your title is enough; everything else is optional.</div>
+      <div><b>2 · Copy &amp; paste</b>Paste the prompt into ChatGPT, Claude or Gemini.</div>
+      <div><b>3 · Bring it back</b>Click <i>Copy code</i> on the AI's answer, paste it here and create.</div>
+    </div>
+    <div class="builder">
+      <label class="full">Story title or idea <span class="hint">(Tamil or English)</span><input id="bTitle" placeholder="e.g. நிலாவுடன் பேசிய குட்டி முயல்" value="${esc($("#qTitle").value || "")}"></label>
+      <label class="full">Your story in 2–3 lines <span class="hint">(optional — the AI keeps your plot exactly)</span><textarea id="bStory" rows="3">${esc($("#qStory").value || "")}</textarea></label>
+      <label>Length <select id="bLen"><option value="1 minute (YouTube Shorts)">1 min · Shorts</option><option value="2 minutes" selected>2 min</option><option value="3 minutes">3 min</option><option value="5 minutes">5 min</option></select></label>
+      <label>Audience <select id="bAud"><option>children 4–10 and families</option><option>toddlers 2–5 (very simple words)</option><option>older kids 8–14</option><option>whole family / adults</option></select></label>
+      <label>Mood <select id="bMood"><option value="">AI chooses</option><option>funny</option><option>heart-touching</option><option>adventure</option><option>mystery</option><option>moral story</option><option>festival special</option><option>bedtime story (calm)</option></select></label>
+      <label>Setting <input id="bSet" placeholder="AI chooses — e.g. village, forest, school"></label>
+      <label>Characters <input id="bChars" placeholder="AI chooses — e.g. a rabbit, a parrot and grandma"></label>
+      <label>Lesson <input id="bLesson" placeholder="AI chooses — e.g. sharing, honesty"></label>
+      <label class="full">Prompt preview <textarea id="bPreview" class="mono" readonly></textarea></label>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="bCopy">📋 Copy prompt</button>
+      <button type="button" class="ghost" id="bGpt">Open ChatGPT</button>
+      <button type="button" class="ghost" id="bClaude">Open Claude</button>
+      <button type="button" class="ghost" id="bGemini">Open Gemini</button>
+    </div>
+    <p class="muted small">Tip: always copy the AI's answer with its <b>Copy code</b> button. Then click <b>Create story from script</b> and check the characters' voices before rendering.</p>`;
+  const done = modal("✨ ChatGPT prompt builder", html, "Close", false);
+  const opts = () => ({ title: $("#bTitle").value, story: $("#bStory").value, length: $("#bLen").value, audience: $("#bAud").value, mood: $("#bMood").value,
+    setting: $("#bSet").value, characters: $("#bChars").value, lesson: $("#bLesson").value });
+  const refresh = () => { $("#bPreview").value = buildStoryPrompt(opts()); };
+  ["#bTitle", "#bStory", "#bLen", "#bAud", "#bMood", "#bSet", "#bChars", "#bLesson"].forEach((k) => $(k).addEventListener("input", refresh));
+  refresh();
+  $("#bCopy").onclick = async () => {
+    if (!$("#bTitle").value.trim() && !$("#bStory").value.trim()) { toast("Type a title or your story first", true); return; }
+    await navigator.clipboard.writeText(buildStoryPrompt(opts()));
+    toast("📋 Prompt copied — paste it into ChatGPT");
+  };
+  const open = (url) => T.opener.openUrl(url).catch(() => toast("Open " + url + " in your browser"));
+  $("#bGpt").onclick = () => open("https://chatgpt.com/");
+  $("#bClaude").onclick = () => open("https://claude.ai/new");
+  $("#bGemini").onclick = () => open("https://gemini.google.com/app");
+  await done;
+  d.classList.remove("wide");
+});
+
 // ------------------------------------------------------------------ first-run setup
 const SETUP_STEPS_BASE = 8;
 async function showSetupProgress(status) {

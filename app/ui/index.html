@@ -79,6 +79,13 @@ Narrator: ஒரு ஊர்ல ஒரு பாட்டி இருந்த
 பாட்டி (warm): வாடா கண்ணு, சாப்பிட்டியா?
 கவின் (excited): இல்ல பாட்டி! கதை சொல்லுங்க!"></textarea>
             <div class="actions"><button id="pasteGo">Create story from script</button><button class="ghost" id="scriptHelp">Script format help</button></div>
+            <div class="builder-cta">
+              <div class="grow"><b>✨ Write with ChatGPT, Claude or Gemini</b>
+                <input id="qTitle" placeholder="Story title (e.g. நிலாவுடன் பேசிய குட்டி முயல்)" style="margin-top:6px" />
+                <textarea id="qStory" rows="3" placeholder="Your story in 2–3 lines (optional) — e.g. A little rabbit wants to talk to the moon. Her friends laugh, but the moon answers through a lake's reflection. They all become friends."></textarea>
+                <div class="actions"><button class="primary" id="qCopy">📋 Copy prompt</button><button class="ghost small" id="builderOpen">More options…</button>
+                <span class="muted small">Then paste into ChatGPT, copy its answer with <b>Copy code</b>, paste above.</span></div></div>
+            </div>
           </div>
         </div>
 
@@ -349,6 +356,7 @@ Narrator: ஒரு ஊர்ல ஒரு பாட்டி இருந்த
 
   <dialog id="modal"><form method="dialog"><h2 id="mTitle"></h2><div id="mBody"></div><div class="actions right"><button value="cancel" class="ghost" id="mCancel">Cancel</button><button value="ok" class="primary" id="mOk">OK</button></div></form></dialog>
 
+  <script src="story_prompt.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
