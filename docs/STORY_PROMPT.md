@@ -2,6 +2,8 @@
 
 This prompt turns a simple title into a story script that VoiceClone Studio renders correctly every time.
 
+**Why it is written this way:** the rules follow what keeps viewers watching Tamil animated story channels: the problem shows up in the first 10 seconds, nothing new is announced, something changes every 20–30 seconds, there is a rule of three and a catchphrase, the lesson is told by the story, and nothing is a slow intro. See the research notes in [VIDEO_PATTERNS.md](VIDEO_PATTERNS.md).
+
 **The easy way:** in the app, open **Story Studio → ✨ ChatGPT prompt builder**. Type your title, choose the options, click **Copy prompt**, paste it into ChatGPT, and paste the script back with **Create story from script**.
 
 **By hand:** copy the prompt below and fill in the `{…}` fields. Leave optional fields as they are, and the AI chooses for you.
@@ -93,10 +95,13 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
 ────────────────────────────────────────
 • 1 min Shorts → 2–3 scenes · 2 min → 4–5 · 3 min → 5–6 · 5 min → 6–8
 • EVERY scene line has BOTH parts:
-    Tamil title   → 2–4 words, shown on screen as a scene card (e.g. நிலா ராத்திரி)
+    Tamil title   → 2–4 words, used as the YouTube chapter name, never spoken (e.g. நிலா ராத்திரி)
     English place → location + time of day + light + mood + one Tamil Nadu detail
                     e.g. "magical forest clearing at night, tall trees, fireflies, full moon, soft blue light"
 • Describe ONLY the place. Never mention characters or people in the scene description.
+• A scene NEVER starts with an introduction. No line explains what the scene is about;
+  the first line of every scene is already part of the action (a character speaking,
+  or a Close-up of something important).
 
 ────────────────────────────────────────
  5. DIALOGUE  (Name (emotion | action): text)
@@ -107,6 +112,8 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
   (Strong emotions such as surprised, laughing and excited show a fun emoji in the video.)
 • action = what ONLY the speaker does, in English, visual and specific:
     "hops up and down", "points at the sky", "claps her hands", "scratches his head"
+  Big, clear body movements animate best. Animals act with their whole body
+  (hops, flaps its wings, wags its tail, ears droop), not only with the face.
   Never touch, hug, carry, land on or bring in another character. Each shot
   shows at most the speaker and one listener.
     ✘ "lands on the elephant's head"   ✘ "hugs grandma"   ✘ "gives the ball to Meera"
@@ -117,14 +124,22 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
     – no brackets, no stage directions, no emojis, no English letters
     – numbers in Tamil words (மூணு, பத்து)
 • Most of the story is dialogue. Let characters react, joke, interrupt and answer each other.
+• Give the main character ONE short catchphrase (e.g. "சூப்பர் ஐடியா!") and use it
+  2–3 times. Children love repeating it.
+• Write for the ear, because every line is spoken by a voice engine:
+    – commas where a person breathes, "…" for a pause, "!" for excitement
+    – everyday words, not rare Sanskrit or literary words
+    – no abbreviations, no symbols (%, &, /), no Roman numerals
 
 ────────────────────────────────────────
  6. NARRATOR, CLOSE-UPS, VIEWER QUESTION
 ────────────────────────────────────────
-• Narrator: at most ONE line per scene (plus the final lesson line), only to set the
-  scene or jump in time. No more than 1 in 5 lines may be Narrator lines. Let the
+• Narrator: at most ONE line per scene (plus the final lesson line), only to jump in
+  time or tell what nobody can say. Never describe what the viewer can already see,
+  never announce the scene ("இப்போது காட்டில்…", "இந்த காட்சியில்…"). No more than 1 in 5 lines may be Narrator lines. Let the
   characters tell the story through what they say to each other.
-• Close-ups ("* Close-up: …"): 2–3 per story, for big visual moments (the glowing
+• Close-ups ("* Close-up: …"): SILENT pictures (the English text is never spoken or
+  shown; it only tells the painter what to draw). 2–3 per story, for big visual moments (the glowing
   moon, a falling leaf, a hidden gift, a broken pot). Objects, hands or places
   ONLY, never people, animals or "the family".
     ✘ "the elephant family sitting happily"   ✔ "a stack of golden dosas on a banana leaf"
@@ -135,14 +150,21 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
 ────────────────────────────────────────
  7. STORY STRUCTURE  (beat sheet)
 ────────────────────────────────────────
- 1. HOOK (first 5 seconds): open on a problem, a mystery or a funny moment, never on weather.
+ 1. HOOK (the FIRST TWO lines, about 10 seconds): a character in the middle of a problem,
+    a mystery or a funny moment. Never open with the Narrator, the weather, "once upon
+    a time" (ஒரு ஊர்ல…) or an introduction of the characters.
  2. WISH / PROBLEM: what the main character wants, and why it's hard.
- 3. TRY & FAIL: one or two attempts, with funny or emotional reactions from friends.
+ 3. TRY, TRY, TRY: the rule of three. Two attempts fail in funny or emotional ways,
+    the third works later. Something NEW happens every 5–6 lines (a joke, a surprise,
+    a new problem), so the story never stands still.
  4. VIEWER QUESTION: pause and let the audience guess.
  5. TWIST: a surprise or a clever idea that changes everything.
  6. HEART MOMENT: the emotional peak (friendship, sharing, forgiveness).
  7. HAPPY ENDING: a warm, satisfying final exchange between characters.
- 8. NARRATOR'S LAST LINE: the gentle lesson in one or two sentences.
+ 8. NARRATOR'S LAST LINE: the gentle lesson in one or two sentences, said warmly, never
+    preached. It may end with a tiny tease ("நாளைக்கு சுட்டி என்ன பண்ணப் போகுது?").
+ The lesson is SHOWN by what happens; the bad behaviour is never rewarded, nothing is
+ scary or upsetting for young children, and no one suffers for long.
 
 ────────────────────────────────────────
  8. TAMIL STYLE GUIDE
@@ -191,6 +213,8 @@ Narrator: அன்னைக்கு ராத்திரி, சுட்ட�
   and the Narrator's voice is unique
 ☐ Every look is in English; animals and objects start with "cute 3D animated cartoon"
 ☐ Every [Scene: …] has a Tamil title AND an English place description, with no characters in it
+☐ The story starts with a character in action (no Narrator, no introduction), and no
+  scene opens with a line that explains or announces the scene
 ☐ Every speaker name exactly matches an @ name
 ☐ Every dialogue line has (emotion | action) with a one-word English emotion
 ☐ Dialogue text is Tamil script only, 1–2 short sentences, with no brackets or English letters

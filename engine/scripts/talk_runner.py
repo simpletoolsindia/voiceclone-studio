@@ -49,18 +49,25 @@ def main():
     anim = AnimateFromCoeff(paths, device)
     work = tempfile.mkdtemp(prefix="talk_")
     face_cache = {}
+    bad_faces = {}   # portrait -> reason; a cartoon animal has no human landmarks, don't retry it per line
     for i, job in enumerate(jobs):
         try:
             say("PROGRESS", i, total, f"Animating line {i + 1} of {total}")
             img, audio, out = job["image"], job["audio"], job["out"]
             jdir = os.path.join(work, f"j{i}")
             os.makedirs(jdir, exist_ok=True)
+            if img in bad_faces:
+                raise RuntimeError(bad_faces[img])
             if img not in face_cache:
                 fdir = os.path.join(work, f"face{len(face_cache)}")
                 os.makedirs(fdir, exist_ok=True)
-                coeff, crop_pic, crop_info = pre.generate(img, fdir, preprocess, source_image_flag=True, pic_size=size)
+                try:
+                    coeff, crop_pic, crop_info = pre.generate(img, fdir, preprocess, source_image_flag=True, pic_size=size)
+                except TypeError:   # SadTalker does `raise 'can not detect the landmark...'` (a str)
+                    coeff = None
                 if coeff is None:
-                    raise RuntimeError("no face found in the portrait - use a clear, front-facing face")
+                    bad_faces[img] = "no human face found in the portrait (cartoon/animal characters use motion animation)"
+                    raise RuntimeError(bad_faces[img])
                 face_cache[img] = (coeff, crop_pic, crop_info)
             coeff, crop_pic, crop_info = face_cache[img]
             batch = get_data(coeff, audio, device, None, still=True)

@@ -632,6 +632,7 @@ $("#sceneList").addEventListener("click", async (ev) => {
       if (b.dataset.lact === "del") { s.lines.splice(li, 1); renderScenes(); scheduleSave(); }
       if (b.dataset.lact === "up" && li > 0) { [s.lines[li - 1], s.lines[li]] = [s.lines[li], s.lines[li - 1]]; renderScenes(); scheduleSave(); }
       if (b.dataset.lact === "play") {
+        if (l.kind === "insert") { toast("Close-ups are silent pictures - their text only describes the image"); return; }
         if (!l.audio) {
           if (!l.text.trim()) return;
           b.textContent = "…"; b.disabled = true;

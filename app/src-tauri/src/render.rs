@@ -521,13 +521,38 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
         if sc.image.as_ref().map(|f| PathBuf::from(f).exists()).unwrap_or(false) {
             continue;
         }
-        let prompt = if sc.visual.is_empty() { format!("{}, Tamil Nadu", sc.title) } else { sc.visual.clone() };
+        let prompt = if sc.visual.is_empty() {
+            // no visual written: describe the place from the story instead of a bare ", Tamil Nadu"
+            let hint: String = sc.lines.iter().filter(|l| l.kind == "insert").map(|l| l.text.trim_start_matches("Close-up:").trim().to_string()).collect::<Vec<_>>().join(", ");
+            format!("a beautiful storybook setting for a scene called '{}', {}, empty of people, family-friendly", sc.title, if hint.is_empty() { "warm light, rich detail".into() } else { hint })
+        } else { sc.visual.clone() };
         let out = dir.join("scenes").join(format!("{}.png", sc.id));
         image_job(engine, json!({"prompt": prompt, "kind": "scene", "style": p.style, "width": sw,
             "height": sh, "seed": stable_seed(&sc.id), "out": out.to_string_lossy()}),
             |f, _| st.set((si as f64 + f) / n_sc as f64, &format!("Painting scene {} of {}", si + 1, n_sc)), &cancelled, &pv).await?;
         p.scenes[si].image = Some(out.to_string_lossy().into());
         story::save(&mut p)?;
+    }
+    // close-up pictures (Fast mode; Cinematic paints them as keyframes and animates them)
+    if !p.cinematic {
+        let (w, h) = if vertical { (768, 1344) } else { (1344, 768) };
+        for si in 0..n_sc {
+            for li in 0..p.scenes[si].lines.len() {
+                check()?;
+                let l = p.scenes[si].lines[li].clone();
+                if l.kind != "insert" || l.image.as_ref().map(|f| PathBuf::from(f).exists()).unwrap_or(false) { continue; }
+                let img = dir.join("keyframes").join(format!("{}.png", l.id));
+                if !img.exists() {
+                    let _ = std::fs::create_dir_all(dir.join("keyframes"));
+                    let prompt = format!("{}, no people", l.text.trim_start_matches("Close-up:").trim());
+                    image_job(engine, json!({"prompt": prompt, "kind": "scene", "style": p.style, "width": w, "height": h,
+                        "seed": stable_seed(&l.id) + l.take as u64 * 7919, "out": img}),
+                        |f, _| st.set((si as f64 + f) / n_sc as f64, "Painting a close-up"), &cancelled, &pv).await?;
+                }
+                p.scenes[si].lines[li].image = Some(img.to_string_lossy().into());
+                story::save(&mut p)?;
+            }
+        }
     }
     // empty background plates for scenes where characters speak on screen
     let on_screen: Vec<String> = p.characters.iter().filter(|c| !c.is_narrator).map(|c| c.id.clone()).collect();
@@ -607,7 +632,15 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
                 }
             }
             if !jobs.is_empty() {
-                let r = engine.run_job_pv("/talking/batch", json!({"jobs": jobs}), |f, m| st.set(f, m), &cancelled, &pv).await?;
+                let r = match engine.run_job_pv("/talking/batch", json!({"jobs": jobs}), |f, m| st.set(f, m), &cancelled, &pv).await {
+                    Ok(r) => r,
+                    Err(e) if e.to_string() == "cancelled" => return Err(e),
+                    Err(e) => {
+                        // e.g. cartoon animals: no human face to lip-sync -> keep going with motion animation
+                        renders.event(id, format!("Talking faces skipped ({e}) - using cartoon motion"));
+                        json!({})
+                    }
+                };
                 if let Some(paths) = r["paths"].as_array() {
                     for (k, (si, li)) in idx.iter().enumerate() {
                         if let Some(pth) = paths.get(k).and_then(|v| v.as_str()) {
@@ -961,7 +994,11 @@ async fn cinematic(engine: &Engine, renders: &Renders, id: &str, p: &mut Project
     }
     if !jobs.is_empty() {
         check()?;
-        let r = engine.run_job_pv("/lipsync", json!({"jobs": jobs}), |f, m| st.set(f, m), cancelled, &pv).await?;
+        let r = match engine.run_job_pv("/lipsync", json!({"jobs": jobs}), |f, m| st.set(f, m), cancelled, &pv).await {
+            Ok(r) => r,
+            Err(e) if e.to_string() == "cancelled" => return Err(e),
+            Err(e) => { renders.event(id, format!("Lip-sync skipped ({e}) - keeping the animated shots")); json!({}) }
+        };
         let paths = r["paths"].as_array().cloned().unwrap_or_default();
         for (j, (si, li)) in idx.iter().enumerate() {
             if let Some(pth) = paths.get(j).and_then(|v| v.as_str()) {

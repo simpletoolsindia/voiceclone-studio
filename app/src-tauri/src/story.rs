@@ -242,9 +242,15 @@ pub fn parse_script(text: &str, base: Option<&Project>) -> Project {
         chars.push(c);
         id
     };
+    let md_escape = regex::Regex::new(r"\\([\[\]!*?#>_\-.()|`~])").unwrap();
     for raw in text.lines() {
-        let l = raw.trim();
-        if l.is_empty() {
+        // text copied from a chat page: markdown escapes (\[ \! \*), code fences and their
+        // "text" / "Copy code" labels are not part of the script
+        let unescaped = md_escape.replace_all(raw.trim(), "$1");
+        let l = unescaped.trim();
+        let low = l.to_ascii_lowercase();
+        if l.is_empty() || l.starts_with("```") || l.starts_with("~~~")
+            || matches!(low.as_str(), "text" | "plaintext" | "copy" | "copy code" | "markdown") {
             continue;
         }
         if let Some(t) = l.strip_prefix("# ") {

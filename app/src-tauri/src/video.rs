@@ -328,7 +328,8 @@ Style: Btn,Segoe UI,{bs},&H00FFFFFF,&H000000FF,&H001A1AE0,&H00000000,-1,0,0,0,10
         }
         SegKind::Line => {
             // No name tags: viewers recognise characters from their faces, voices and the story.
-            if subtitles && !seg.text.is_empty() {
+            // a Close-up's text is an English picture description for the image model - never shown
+            if subtitles && !seg.text.is_empty() && seg.label != "Close-up" {
                 let chunks = caption_chunks(&seg.text, if vertical { 26 } else { 40 });
                 let total: usize = chunks.iter().map(|c| c.chars().count()).sum::<usize>().max(1);
                 let speak = (seg.duration - 0.40).max(0.5);
@@ -416,8 +417,12 @@ fn actor_chain(graph: &mut String, inp: &mut Inputs, a: &Actor, size: i64, d: f6
     };
     let mi = inp.file(&["-loop", "1", "-t", &dur], a.mask.as_ref().unwrap());
     let dim = if listener { ",colorchannelmixer=rr=0.82:gg=0.82:bb=0.86" } else { "" };
-    let breathe = if listener || a.video.is_none() {
+    let breathe = if listener {
         format!(",scale=w='{size}*(1+0.012*sin(2*PI*t/3.4))':h=-1:eval=frame")
+    } else if a.video.is_none() {
+        // speaking without a lip-synced clip (cartoon animals, objects): cartoon "talk" motion -
+        // squash-and-stretch on the syllable rhythm plus a gentle head tilt, so the speaker reads as talking
+        format!(",scale=w='{size}*(1+0.022*sin(2*PI*t*2.3))':h='{size}*(1+0.050*abs(sin(2*PI*t*2.3+0.6)))':eval=frame,rotate='0.035*sin(2*PI*t*0.9)':c=none")
     } else {
         String::new()
     };
@@ -480,7 +485,8 @@ pub fn render_segment(seg: &Segment, l: &Layout, out: &Path, work: &Path, card: 
             let sp = speaker_cut.unwrap();
             let (x, y, sz) = actor_box(l, seg.shot, sp.right, false);
             let (sh, act) = actor_chain(&mut g, &mut inp, &sp, sz, d, false, "S");
-            g += &format!("[{last}][{sh}]overlay={}:{}[s1];[s1][{act}]overlay={x}:{y}:eof_action=repeat[s2];", x + 22, y + 16);
+            g += &format!("[{last}][{sh}]overlay={}:{}[s1];[s1][{act}]overlay=x='{x}+({sz}-overlay_w)/2':y='{y}+({sz}-overlay_h){hop}':eval=frame:eof_action=repeat[s2];", x + 22, y + 16,
+                hop = if sp.video.is_none() { "-10*abs(sin(2*PI*t*2.3))" } else { "" });
             last = "s2".into();
             if let Some(e) = &seg.emoji {
                 let ei = inp.file(&["-loop", "1", "-t", &format!("{d:.3}")], e);
@@ -696,7 +702,7 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
     let title_chapter = if segs.is_empty() { Some("தொடக்கம்".to_string()) } else { None };
     segs.push(Segment {
         kind: SegKind::Title { title: p.title.clone(), subtitle: p.logline.clone() },
-        background: first_bg, duration: 3.6, fade_in: true, fade_out: true,
+        background: first_bg, duration: 2.6, fade_in: true, fade_out: true,
         sfx: vec![(sfx.ding.clone(), 0.25, 0.45)], chapter: title_chapter, label: "Title card".into(), ..blank.clone()
     });
     let mut motion = 1;
@@ -704,7 +710,9 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
         let bg = sc.image.clone().map(PathBuf::from).or_else(|| p.background_image.clone().map(PathBuf::from));
         let amb = ambience_for(&sc.visual, &sc.title, sfx);
         let mut chapter = Some(if sc.title.is_empty() { format!("காட்சி {}", si + 1) } else { sc.title.clone() });
-        if !sc.title.is_empty() {
+        // No scene title cards: they stall the story (viewers drop off) - the scene title stays a
+        // YouTube chapter name on the scene's first shot.
+        if false && !sc.title.is_empty() {
             segs.push(Segment {
                 kind: SegKind::SceneCard { title: sc.title.clone() }, background: bg.clone(), duration: 2.2,
                 fade_in: true, ambience: amb.clone(), sfx: vec![(sfx.whoosh.clone(), 0.0, 0.55)],
