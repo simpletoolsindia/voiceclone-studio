@@ -94,5 +94,5 @@ def generate(prompt: str, out: Path, width: int = 1344, height: int = 768, seed:
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.save(out)
-    p(1.0, "Image ready")
+    p(1.0, "Image ready", str(out))
     return {"path": str(out), "seed": seed, "width": width, "height": height}

@@ -207,6 +207,7 @@ class TTSReq(BaseModel):
     mode: str = "auto"
     speed: Optional[float] = None
     out: Optional[str] = None
+    take: int = 0
 
 
 class ConvertReq(BaseModel):
@@ -224,7 +225,7 @@ def tts(r: TTSReq):
 
     def run(p):
         gpu.reserve("tts", "vc")
-        wav, sr = speak(store(), r.voice_id, r.text, r.language, r.mode, r.speed, progress=p)
+        wav, sr = speak(store(), r.voice_id, r.text, r.language, r.mode, r.speed, progress=p, take=r.take)
         dest = Path(r.out) if r.out else out_path("tts")
         save_wav(dest, wav, sr)
         return {"path": str(dest), "duration": round(len(wav) / sr, 2)}

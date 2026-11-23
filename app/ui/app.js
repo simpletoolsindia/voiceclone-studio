@@ -108,12 +108,14 @@ async function pollEngine() {
       if (!engineReady) { engineReady = true; loadVoices(); }
     } else if (!s.installed) {
       pill.classList.add("bad");
-      $("#engineText").textContent = "Engine not installed";
+      $("#engineText").textContent = s.status === "installing" ? "Installing engine…" : "Engine not installed";
     } else {
       $("#engineText").textContent = s.status === "installing" ? "Installing engine…" : "Engine " + s.status;
       if (s.status === "stopped" || s.status === "setup failed") pill.classList.add("bad");
       engineReady = false;
     }
+    $("#setupCard").classList.toggle("hidden", s.status === "running" || (s.installed && s.status !== "installing" && s.status !== "setup failed"));
+    if (s.status === "installing" || s.status === "setup failed") showSetupProgress(s.status);
     $("#engInfo") && ($("#engInfo").innerHTML = `Status: <b>${esc(s.status)}</b><br>Engine folder: ${esc(s.dir)}<br>Data folder: ${esc(s.data_dir)}`);
   } catch (e) { /* ignore */ }
   setTimeout(pollEngine, 2500);
@@ -135,6 +137,7 @@ async function refreshJobs() {
     return `<div class="job ${j.status}">
       <div class="job-top"><span class="job-title">${esc(j.title)}</span><span class="job-pct">${pct.toFixed ? pct.toFixed(pct < 10 ? 1 : 0) : pct}%</span></div>
       <div class="progress"><div style="width:${pct}%"></div></div>
+      ${j.steps && j.steps.length ? `<div class="job-step">Step ${j.steps.filter((x) => x.status === "done").length + 1} of ${j.steps.filter((x) => x.status !== "skipped").length}: ${esc((j.steps.find((x) => x.status === "running") || {}).label || "")}</div>` : ""}
       <div class="job-sub"><span>${esc(j.error || j.stage || "")}</span><span>${compact ? eta : `${eta} ${j.elapsed_sec ? "· " + fmtTime(j.elapsed_sec) + " elapsed" : ""}`}</span></div>
       ${compact ? "" : `<div class="actions">${right}${j.result && j.result.path ? `<button class="ghost small" data-open="${esc(j.result.path)}">Show file</button>` : ""}</div>`}
       ${compact ? `<div class="actions right" style="margin-top:4px">${right}</div>` : ""}
@@ -144,9 +147,12 @@ async function refreshJobs() {
     $("#jobList").innerHTML = lastJobs.length ? lastJobs.map((j) => jobHtml(j, false)).join("") : `<div class="empty">No jobs yet.</div>`;
   }
   const dock = $("#dock");
-  if (running.length) {
-    dock.innerHTML = `<div class="dock-head"><span>Running in background</span><span>${running.length} job${running.length > 1 ? "s" : ""}</span></div>` +
-      running.slice(0, 3).map((j) => jobHtml(j, true)).join("");
+  // the story page already shows full details for the render being watched
+  const watching = curRenderJob && $("#page-studio").classList.contains("active") && !$("#studioEditor").classList.contains("hidden");
+  const dockJobs = running.filter((j) => !(watching && j.id === curRenderJob));
+  if (dockJobs.length) {
+    dock.innerHTML = `<div class="dock-head"><span>Running in background</span><span>${dockJobs.length} job${dockJobs.length > 1 ? "s" : ""}</span></div>` +
+      dockJobs.slice(0, 3).map((j) => jobHtml(j, true)).join("");
     dock.classList.remove("hidden");
   } else dock.classList.add("hidden");
   updateRenderPanel();
@@ -346,7 +352,7 @@ async function openStory(id) {
   $("#studioHome").classList.add("hidden");
   $("#studioEditor").classList.remove("hidden");
   go("studio");
-  curRenderJob = lastJobs.find((j) => j.kind === "story" && j.status === "running" && j.title.endsWith(cur.title))?.id || null;
+  curRenderJob = lastJobs.find((j) => j.kind === "story" && j.status === "running" && (j.project_id === cur.id || j.title.endsWith(cur.title)))?.id || null;
   renderEditor();
 }
 $("#edBack").addEventListener("click", () => { flushSave(); cur = null; $("#studioEditor").classList.add("hidden"); $("#studioHome").classList.remove("hidden"); loadStories(); });
@@ -659,18 +665,70 @@ $("#edRender").addEventListener("click", async () => {
   } catch (e) { toast(String(e), true, 6000); }
 });
 $("#rCancel").addEventListener("click", () => curRenderJob && invoke("job_cancel", { id: curRenderJob }));
+let lastGpu = null, gpuTimer = 0;
+async function pollGpu() {
+  if (Date.now() - gpuTimer < 3000) return;
+  gpuTimer = Date.now();
+  try { lastGpu = await api("GET", "/gpu"); } catch { lastGpu = null; }
+}
+function setTaskbar(progress, status) {
+  try { T.window.getCurrentWindow().setProgressBar({ status, progress: Math.round(progress) }); } catch {}
+}
+const stepTime = (st) => {
+  const now = Date.now() / 1000;
+  if (st.status === "done" && st.started && st.finished) return st.finished - st.started < 1 ? "cached ✓" : `took ${fmtTime(st.finished - st.started)}`;
+  if (st.status === "running" && st.started) {
+    const el = now - st.started;
+    const left = st.progress > 0.08 && el > 3 ? el * (1 - st.progress) / st.progress : null;
+    return `${fmtTime(el)}${left != null ? ` · ~${fmtTime(left)} left` : ""}`;
+  }
+  if (st.status === "skipped") return "skipped";
+  return st.estimate >= 1 ? `~${fmtTime(st.estimate)}` : "cached";
+};
 async function updateRenderPanel() {
   if (!cur || !curRenderJob) { $("#renderPanel").classList.add("hidden"); setEditorLocked(false); return; }
   const j = lastJobs.find((x) => x.id === curRenderJob);
   if (!j) return;
   $("#renderPanel").classList.remove("hidden");
   setEditorLocked(true);
-  $("#rStage").textContent = `${j.stage} — ${j.percent.toFixed(1)}%`;
-  $("#rBar").style.width = j.percent + "%";
-  $("#rMeta").textContent = [j.eta_sec != null ? `about ${fmtTime(j.eta_sec)} left` : "estimating time…", `${fmtTime(j.elapsed_sec)} elapsed`].join(" · ");
+  pollGpu();
+  const pct = j.percent || 0;
+  $("#rPct").textContent = pct.toFixed(pct < 10 ? 1 : 0) + "%";
+  $("#rArc").style.strokeDashoffset = String(326.7 * (1 - pct / 100));
+  $("#rBar").style.width = pct + "%";
+  $("#rStage").textContent = j.stage || "Working…";
+  const finishAt = j.eta_sec != null ? new Date(Date.now() + j.eta_sec * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+  const stats = [
+    `<span>Elapsed <b>${fmtTime(j.elapsed_sec)}</b></span>`,
+    `<span>Time left <b>${j.eta_sec != null ? "~" + fmtTime(j.eta_sec) : "estimating…"}</b></span>`,
+    finishAt ? `<span>Done by <b>${finishAt}</b></span>` : "",
+    `<span>Step <b>${(j.steps || []).filter((x) => x.status === "done").length + 1} / ${(j.steps || []).filter((x) => x.status !== "skipped").length}</b></span>`,
+    lastGpu && lastGpu.vram_total_gb ? `<span>GPU <b>${(lastGpu.vram_total_gb - lastGpu.vram_free_gb).toFixed(1)} / ${lastGpu.vram_total_gb} GB</b></span>` : "",
+  ];
+  $("#rStats").innerHTML = stats.join("");
+  $("#rSteps").innerHTML = (j.steps || []).map((st) => `
+    <li class="rp-step ${st.status}">
+      <span class="rp-icon">${st.status === "done" ? "✓" : st.status === "running" ? "" : st.status === "skipped" ? "–" : ""}</span>
+      <div style="min-width:0"><div class="rp-step-label">${esc(st.label)}</div>
+        ${st.status === "running" ? `<div class="rp-step-detail">${esc(st.detail || "Working…")}</div><div class="progress"><div style="width:${(st.progress * 100).toFixed(1)}%"></div></div>` : ""}</div>
+      <span class="rp-step-time">${stepTime(st)}${st.status === "running" ? `<br><b>${(st.progress * 100).toFixed(0)}%</b>` : ""}</span>
+    </li>`).join("");
+  if (j.preview) {
+    const img = $("#rPreview");
+    const src = fileUrl(j.preview);
+    if (img.dataset.src !== src) { img.dataset.src = src; img.src = src; }
+    img.classList.remove("hidden"); $("#rPreviewEmpty").classList.add("hidden");
+  }
+  $("#rFacts").innerHTML = (j.facts || []).map(([k, v]) => `<div><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join("");
+  const log = $("#rLog");
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 10;
+  log.innerHTML = (j.events || []).map((e) => `<div>${esc(e)}</div>`).join("");
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  setTaskbar(pct, "normal");
   if (j.status !== "running") {
     const done = j.status === "done";
     curRenderJob = null;
+    setTaskbar(0, "none");
     $("#renderPanel").classList.add("hidden");
     setEditorLocked(false);
     cur = await invoke("story_get", { id: cur.id });
@@ -684,27 +742,165 @@ function setEditorLocked(lock) {
   $("#studioEditor .editor-grid").style.pointerEvents = lock ? "none" : "";
   $("#edRender").disabled = lock;
 }
+const projDir = () => (cur.output || "").replace(/[\\/][^\\/]*$/, "");
+const tFmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+const tParse = (v) => { const m = String(v).match(/(\d+):(\d{1,2})/); return m ? +m[1] * 60 + +m[2] : (+v || 0); };
+const lineById = (id) => { for (const s of cur.scenes) for (const l of s.lines) if (l.id === id) return [s, l]; return [null, null]; };
+
 function showResult() {
   if (!cur?.output) { $("#resultPanel").classList.add("hidden"); return; }
   $("#resultPanel").classList.remove("hidden");
-  $("#resVideo").src = fileUrl(cur.output) + "?t=" + cur.updated;
-  const thumb = cur.output.replace(/[^\\/]+$/, "thumbnail.jpg");
+  const vid = $("#resVideo");
+  const src = fileUrl(cur.output) + "?t=" + cur.updated;
+  if (vid.dataset.src !== src) { vid.dataset.src = src; vid.src = src; }
   const img = $("#resThumb");
   img.onerror = () => img.classList.add("hidden");
   img.onload = () => img.classList.remove("hidden");
-  img.src = fileUrl(thumb) + "?t=" + cur.updated;
-  $("#resInfo").textContent = (cur.format === "shorts" ? "YouTube Shorts 1080×1920" : "YouTube 1920×1080") + " · H.264 · −14 LUFS";
+  img.src = fileUrl(projDir() + "/thumbnail.jpg") + "?t=" + cur.updated;
+  const v = (cur.versions || []).find((x) => x.path === cur.output);
+  $("#resInfo").textContent = (cur.format === "shorts" ? "YouTube Shorts 1080×1920" : "YouTube 1920×1080") + " · H.264 · −14 LUFS" + (v ? ` · version ${v.version}` : "");
   $("#resDesc").value = cur.description || "";
+  renderTimeline();
+  renderVersions();
+  fixChips();
 }
-$("#resSave").addEventListener("click", async () => {
-  const dest = await T.dialog.save({ defaultPath: `${cur.title}.mp4`, filters: [{ name: "MP4 video", extensions: ["mp4"] }] });
-  if (dest) { await invoke("copy_file", { src: cur.output, dest }); toast("Video saved"); }
+
+function renderTimeline() {
+  const dir = projDir();
+  const shots = (cur.timeline || []).filter((s) => ["dialogue", "narration", "insert", "question"].includes(s.kind));
+  $("#resTimeline").innerHTML = shots.map((s) => {
+    const [sc, l] = lineById(s.line_id);
+    const thumb = s.kind === "narration" ? sc?.image : s.kind === "question" ? null : (l?.image || `${dir}/keyframes/${s.line_id}.png`);
+    const icon = s.kind === "question" ? "❓" : s.kind === "narration" ? "📖" : "🎬";
+    return `<div class="shot" data-start="${s.start}" data-line="${s.line_id || ""}" data-kind="${s.kind}">
+      ${thumb ? `<img src="${fileUrl(thumb)}" onerror="this.outerHTML='<div class=noimg>${icon}</div>'">` : `<div class="noimg">${icon}</div>`}
+      <span class="t">${tFmt(s.start)}</span>
+      <div class="who">${esc(s.hook ? "🔥 " + s.label : s.label)}</div><div class="what">${esc(s.text || "")}</div></div>`;
+  }).join("") || `<div class="muted small">The shot timeline appears after the next render.</div>`;
+}
+$("#resTimeline").addEventListener("click", (ev) => {
+  const c = ev.target.closest(".shot"); if (!c) return;
+  const t = +c.dataset.start;
+  $("#resVideo").currentTime = t + 0.05;
+  $("#fixAt").value = tFmt(t);
+  const kind = c.dataset.kind;
+  $$(".shot-menu").forEach((m) => m.remove());
+  const menu = document.createElement("div");
+  menu.className = "shot-menu";
+  const [, l] = lineById(c.dataset.line);
+  const btn = (label, req) => `<button class="ghost small" data-req="${esc(req)}">${label}</button>`;
+  menu.innerHTML = `<b>Fix the shot at ${tFmt(t)}${l?.text ? ": “" + esc(l.text.slice(0, 50)) + "…”" : ""}</b>` +
+    (kind === "dialogue" ? btn("👄 Fix lip-sync", "fix the lip-sync") + btn("🔁 New animation", "animate again") +
+      btn("🗣 New voice take", "record the voice again") + btn("🐢 Slower", "say it slower") + btn("✏️ Edit words", "change the words") +
+      btn("🎨 Change look", "change the look") : "") +
+    (kind === "narration" ? btn("🗣 New voice take", "record the voice again") + btn("✏️ Edit words", "change the words") : "") +
+    (kind === "insert" ? btn("🔁 New animation", "animate again") : "") +
+    btn("🖼 Repaint background", "change the background") + btn("🗑 Remove", "delete this line");
+  $("#resTimeline").after(menu);
+  menu.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-req]"); if (!b) return;
+    $("#fixReq").value = b.dataset.req;
+    previewFix();
+    menu.remove();
+  });
 });
-$("#resThumbSave").addEventListener("click", async () => {
-  const src = cur.output.replace(/[^\\/]+$/, "thumbnail.jpg");
-  const dest = await T.dialog.save({ defaultPath: `${cur.title} thumbnail.jpg`, filters: [{ name: "JPEG", extensions: ["jpg"] }] });
-  if (dest) { await invoke("copy_file", { src, dest }); toast("Thumbnail saved"); }
+$("#resVideo").addEventListener("timeupdate", () => {
+  const t = $("#resVideo").currentTime;
+  let active = null;
+  $$("#resTimeline .shot").forEach((c) => { if (+c.dataset.start <= t) active = c; c.classList.remove("active"); });
+  if (active) { active.classList.add("active"); }
 });
+
+function fixChips() {
+  const people = cur.characters.filter((c) => !c.is_narrator).map((c) => c.name);
+  const ex = [
+    "fix the lip-sync", "say it slower", `change ${people[people.length - 1] || "Appa"}'s shirt to blue`,
+    `give ${people[0] || "Paati"} grey hair`, "make the background daytime", "animate again with a big smile",
+  ];
+  $("#fixChips").innerHTML = ex.map((x) => `<span class="chip" data-x="${esc(x)}">${esc(x)}</span>`).join("");
+}
+$("#fixChips").addEventListener("click", (e) => { const c = e.target.closest("[data-x]"); if (c) { $("#fixReq").value = c.dataset.x; $("#fixReq").focus(); } });
+$("#fixNow").addEventListener("click", () => { $("#fixAt").value = tFmt($("#resVideo").currentTime); });
+
+let currentPlan = null;
+async function previewFix() {
+  const req = $("#fixReq").value.trim();
+  if (!req) return toast("Type what you want to change", true);
+  try {
+    currentPlan = await invoke("story_fix_preview", { id: cur.id, at: tParse($("#fixAt").value), request: req });
+    renderPlan();
+  } catch (e) { toast(String(e), true, 7000); }
+}
+$("#fixPreview").addEventListener("click", previewFix);
+$("#fixReq").addEventListener("keydown", (e) => { if (e.key === "Enter") previewFix(); });
+
+function renderPlan() {
+  const pl = currentPlan, box = $("#fixPlan");
+  const field = { text: ["New words (Tamil)", "text"], look: ["New look (English: hair, clothes, colours…)", "look"],
+    scene: ["New background description (English)", "visual"], animate: ["Motion / action (English)", "motion"],
+    emotion: ["Motion / action (English)", "motion"] }[pl.action];
+  const icons = { lipsync: "👄", text: "✏️", voice: "🗣", animate: "🔁", look: "🎨", scene: "🖼", emotion: "🎭", delete: "🗑" };
+  box.innerHTML = `
+    <div class="sum">${icons[pl.action] || "✨"} ${esc(pl.summary)}</div>
+    <div class="muted small">Shot: ${esc(pl.target)}</div>
+    ${field ? `<label>${field[0]}${pl.needs ? ' <span class="hint" style="color:var(--warn)">— please fill this in</span>' : ""}
+      <textarea id="planField" rows="2">${esc(pl[field[1]] || "")}</textarea></label>` : ""}
+    ${pl.action === "emotion" ? `<label>Emotion <input id="planEmotion" value="${esc(pl.emotion || "")}"></label>` : ""}
+    <div class="meta"><span>${pl.shots} shot${pl.shots > 1 ? "s" : ""} regenerated</span><span>everything else reused</span><span>about ${fmtTime(pl.estimate_sec)}</span></div>
+    <div class="actions"><button class="primary" id="planApply">✅ Apply &amp; regenerate</button><button class="ghost" id="planQueue">Apply, render later</button><button class="ghost" id="planCancel">Cancel</button></div>`;
+  box.classList.remove("hidden");
+  if (field) $("#planField").focus();
+  $("#planCancel").onclick = () => box.classList.add("hidden");
+  const apply = async (render) => {
+    if (field) pl[field[1]] = $("#planField").value;
+    if ($("#planEmotion")) pl.emotion = $("#planEmotion").value;
+    try {
+      const r = await invoke("story_fix_apply", { id: cur.id, plan: pl, render });
+      box.classList.add("hidden");
+      $("#fixReq").value = "";
+      cur = await invoke("story_get", { id: cur.id });
+      if (r.job) { curRenderJob = r.job; refreshJobs(); toast(`${r.note} — regenerating only that part`); }
+      else { toast(`${r.note} — saved. Add more fixes, then click Render video.`); }
+      renderEditor();
+    } catch (e) { toast(String(e), true, 7000); }
+  };
+  $("#planApply").onclick = () => apply(true);
+  $("#planQueue").onclick = () => apply(false);
+}
+
+function renderVersions() {
+  const vs = [...(cur.versions || [])].reverse();
+  $("#resVersions").innerHTML = vs.map((v) => `
+    <div class="version ${v.path === cur.output ? "current" : ""}">
+      <span class="v">v${v.version}</span><span class="n" title="${esc(v.note)}">${esc(v.note)} · ${new Date(v.time * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+      <button class="ghost small" data-play="${esc(v.path)}">▶</button>
+      <button class="ghost small" data-dl="${esc(v.path)}">⬇</button>
+      ${v.path === cur.output ? "" : `<button class="ghost small" data-use="${esc(v.path)}">Use</button>`}
+    </div>`).join("") || `<div class="muted small">No versions yet.</div>`;
+}
+$("#resVersions").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.play) { $("#resVideo").src = fileUrl(b.dataset.play) + "?v=" + Date.now(); $("#resVideo").play(); }
+  if (b.dataset.dl) downloadFile(b.dataset.dl, b.dataset.dl.split(/[\\/]/).pop(), "mp4");
+  if (b.dataset.use) { cur = await invoke("story_use_version", { id: cur.id, path: b.dataset.use }); renderEditor(); toast("Switched to that version"); }
+});
+
+async function downloadFile(src, name, ext) {
+  const dest = await T.dialog.save({ defaultPath: name, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
+  if (dest) { await invoke("copy_file", { src, dest }); toast("Saved ✓"); }
+}
+async function exportAndSave(kind, ext, label) {
+  try {
+    toast(kind === "shorts" ? "Making the Shorts teaser… (about a minute)" : `Preparing ${label}…`, false, 2500);
+    const path = await invoke("story_export", { id: cur.id, kind });
+    await downloadFile(path, path.split(/[\\/]/).pop(), ext);
+  } catch (e) { toast(String(e), true, 7000); }
+}
+$("#resSave").addEventListener("click", () => downloadFile(cur.output, `${cur.title}.mp4`, "mp4"));
+$("#resThumbSave").addEventListener("click", () => downloadFile(projDir() + "/thumbnail.jpg", `${cur.title} thumbnail.jpg`, "jpg"));
+$("#resSrt").addEventListener("click", () => exportAndSave("srt", "srt", "subtitles"));
+$("#resMp3").addEventListener("click", () => exportAndSave("mp3", "mp3", "audio"));
+$("#resShorts").addEventListener("click", () => exportAndSave("shorts", "mp4", "Shorts teaser"));
 $("#resOpen").addEventListener("click", () => T.opener.revealItemInDir(cur.output));
 $("#resDescCopy").addEventListener("click", () => { navigator.clipboard.writeText($("#resDesc").value); toast("Description copied — paste it into YouTube"); });
 
@@ -713,6 +909,15 @@ async function loadSettings() {
   const s = await invoke("settings_get");
   $("#sWriter").value = s.writer; $("#sAnthropic").value = s.anthropic_api_key; $("#sMinimax").value = s.minimax_api_key;
   $("#sMmModel").value = s.minimax_model; $("#sTray").checked = s.close_to_tray; $("#sAuto").checked = s.autostart_engine;
+  $("#engDir").textContent = s.engine_dir || "Built-in";
+  $("#sIntro").textContent = s.intro_video ? s.intro_video.split(/[\\/]/).pop() : "No intro";
+  $("#sOutro").textContent = s.outro_video ? s.outro_video.split(/[\\/]/).pop() : "No outro";
+  try {
+    const c = await invoke("cache_info");
+    const gb = (c.total_bytes / 1e9).toFixed(2);
+    const k = c.kinds;
+    $("#sCache").textContent = `${gb} GB reused across stories — ${k.tts.files} voice lines, ${k.images.files} images, ${k.clips.files} animated shots, ${k.sync.files} lip-syncs, ${k.segments.files} composed shots.`;
+  } catch {}
   try {
     const models = await invoke("ollama_models");
     $("#sOllama").innerHTML = `<option value="">Auto</option>` + models.map((m) => `<option ${m === s.ollama_model ? "selected" : ""}>${esc(m)}</option>`).join("");
@@ -734,12 +939,66 @@ $("#sSave").addEventListener("click", async () => {
   toast("Settings saved"); loadSettings();
 });
 $("#engInstall").addEventListener("click", async () => {
-  try { await invoke("engine_setup", { talkingFaces: $("#engTalking").checked }); toast("Installing — this downloads several GB and can take 10–30 minutes"); }
+  try { await invoke("engine_setup", { talkingFaces: $("#engTalking").checked, cinematic: true }); toast("Installing — this downloads several GB and can take 20–60 minutes"); }
   catch (e) { toast(String(e), true); }
 });
 $("#engRestart").addEventListener("click", async () => { await invoke("engine_restart"); toast("Restarting engine…"); });
 $("#engUnload").addEventListener("click", async () => { await api("POST", "/gpu/unload").catch(() => {}); toast("GPU memory will be freed"); });
 $("#engData").addEventListener("click", async () => { const s = await invoke("engine_status"); T.opener.openPath(s.data_dir); });
+
+// ------------------------------------------------------------------ first-run setup
+const SETUP_STEPS_BASE = 8;
+async function showSetupProgress(status) {
+  $("#setupProgress").classList.remove("hidden");
+  $("#setupGo").disabled = status === "installing";
+  const log = await invoke("engine_log");
+  const steps = log.filter((l) => l.startsWith("==> "));
+  const total = SETUP_STEPS_BASE + ($("#setupTalking").checked ? 4 : 0) + ($("#setupCine").checked ? 2 : 0);
+  const done = Math.min(steps.length, total);
+  const failed = log.some((l) => l.includes("SETUP FAILED"));
+  const ok = log.some((l) => l.includes("SETUP COMPLETE"));
+  const pct = ok ? 100 : Math.max(2, Math.round((done - 0.5) / total * 100));
+  $("#setupBar").style.width = pct + "%";
+  $("#setupStage").textContent = failed ? "Setup failed — see the messages below, then click Set up again"
+    : ok ? "✓ Setup complete — starting the engine…" : `Step ${done} of ~${total}: ${(steps[steps.length - 1] || "==> Starting").slice(4)}`;
+  $("#setupMeta").textContent = `${pct}% · large downloads can look paused for a few minutes — that's normal`;
+  const el = $("#setupLog");
+  el.textContent = log.slice(-60).join("\n");
+  el.scrollTop = el.scrollHeight;
+  if (failed) $("#setupGo").disabled = false;
+}
+$("#setupGo").addEventListener("click", async () => {
+  try {
+    await invoke("engine_setup", { talkingFaces: $("#setupTalking").checked, cinematic: $("#setupCine").checked });
+    showSetupProgress("installing");
+    toast("Setup started — you can leave this window open or minimise it");
+  } catch (e) { toast(String(e), true, 8000); }
+});
+async function pickEngineDir() {
+  const d = await T.dialog.open({ directory: true, multiple: false, title: "Choose the engine folder (contains vcstudio and .venv)" });
+  if (!d) return;
+  await invoke("settings_set", { patch: { engine_dir: d } });
+  toast("Engine folder saved — restarting the app engine…");
+  setTimeout(() => invoke("engine_restart"), 300);
+  loadSettings();
+}
+$("#setupHave").addEventListener("click", async () => { await pickEngineDir(); toast("Restart VoiceClone Studio to use the new engine folder", false, 6000); });
+$("#engDirPick").addEventListener("click", async () => { await pickEngineDir(); toast("Restart VoiceClone Studio to use the new engine folder", false, 6000); });
+$("#engDirClear").addEventListener("click", async () => { await invoke("settings_set", { patch: { engine_dir: "" } }); loadSettings(); toast("Using the built-in engine after the next restart"); });
+
+async function pickBumper(key) {
+  const f = await pickFile([{ name: "Video", extensions: ["mp4", "mov", "mkv", "webm"] }]);
+  if (!f) return;
+  await invoke("settings_set", { patch: { [key]: f } }); loadSettings(); toast("Saved — added to every new render");
+}
+$("#sIntroPick").addEventListener("click", () => pickBumper("intro_video"));
+$("#sOutroPick").addEventListener("click", () => pickBumper("outro_video"));
+$("#sIntroClear").addEventListener("click", async () => { await invoke("settings_set", { patch: { intro_video: "" } }); loadSettings(); });
+$("#sOutroClear").addEventListener("click", async () => { await invoke("settings_set", { patch: { outro_video: "" } }); loadSettings(); });
+$("#sCacheClear").addEventListener("click", async () => {
+  if (!(await modal("Clear cache?", "<p>Stories keep their own files. Clearing only removes the shared reuse cache, so the next renders may take longer.</p>", "Clear"))) return;
+  await invoke("cache_clear"); loadSettings(); toast("Cache cleared");
+});
 
 // ------------------------------------------------------------------ boot
 (async function boot() {

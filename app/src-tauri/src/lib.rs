@@ -1,3 +1,4 @@
+mod edit;
 mod engine;
 mod live;
 mod minimax;
@@ -70,7 +71,7 @@ async fn engine_request(s: State<'_, AppState>, method: String, path: String, bo
 
 /// Install / repair the AI engine by running the setup script; output goes to the engine log.
 #[tauri::command]
-fn engine_setup(s: State<AppState>, talking_faces: bool) -> Res<()> {
+fn engine_setup(s: State<AppState>, talking_faces: bool, cinematic: Option<bool>) -> Res<()> {
     let dir = s.engine.dir.clone();
     let script = dir.join("scripts").join("setup_engine.ps1");
     if !script.exists() {
@@ -85,6 +86,9 @@ fn engine_setup(s: State<AppState>, talking_faces: bool) -> Res<()> {
         cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]).arg(&script);
         if talking_faces {
             cmd.arg("-TalkingFaces");
+        }
+        if cinematic.unwrap_or(false) {
+            cmd.arg("-Cinematic");
         }
         cmd.current_dir(&dir).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
         #[cfg(windows)]
@@ -232,6 +236,56 @@ fn story_render(s: State<AppState>, id: String) -> Res<String> {
     render::start(s.engine.clone(), s.renders.clone(), id, set).map_err(e)
 }
 
+/// Interpret "at 1:22 change Appa's hair to grey" into a reviewable plan.
+#[tauri::command]
+fn story_fix_preview(id: String, at: f64, request: String) -> Res<edit::FixPlan> {
+    let p = story::load(&id).map_err(e)?;
+    edit::interpret(&p, at, &request).map_err(e)
+}
+
+/// Apply a reviewed plan and regenerate only what it touches.
+#[tauri::command]
+fn story_fix_apply(s: State<AppState>, id: String, plan: edit::FixPlan, render: Option<bool>) -> Res<Value> {
+    let mut p = story::load(&id).map_err(e)?;
+    let note = edit::apply(&mut p, &plan).map_err(e)?;
+    story::save(&mut p).map_err(e)?;
+    let job = if render.unwrap_or(true) {
+        let set = s.settings.lock().unwrap().clone();
+        Some(render::start(s.engine.clone(), s.renders.clone(), id, set).map_err(e)?)
+    } else {
+        None
+    };
+    Ok(json!({"note": note, "job": job}))
+}
+
+#[tauri::command]
+fn story_export(id: String, kind: String) -> Res<String> {
+    let p = story::load(&id).map_err(e)?;
+    edit::export(&p, &kind).map(|p| p.to_string_lossy().to_string()).map_err(e)
+}
+
+/// Make an earlier version the current video.
+#[tauri::command]
+fn story_use_version(id: String, path: String) -> Res<story::Project> {
+    let mut p = story::load(&id).map_err(e)?;
+    if !std::path::Path::new(&path).exists() || !p.versions.iter().any(|v| v["path"].as_str() == Some(path.as_str())) {
+        return Err("version not found".into());
+    }
+    p.output = Some(path);
+    story::save(&mut p).map_err(e)?;
+    Ok(p)
+}
+
+#[tauri::command]
+fn cache_info() -> Value {
+    render::cache_stats()
+}
+
+#[tauri::command]
+fn cache_clear() -> Res<()> {
+    render::cache_clear().map_err(e)
+}
+
 #[tauri::command]
 async fn ollama_models() -> Res<Vec<String>> {
     story::ollama_models().await.map_err(|_| "Ollama is not running".to_string())
@@ -314,6 +368,29 @@ pub fn cli() -> Option<i32> {
                 Err(err) => { eprintln!("{err}"); Some(1) }
             }
         }
+        Some("--fix") => {
+            // voiceclone-studio --fix <project-id> <m:ss> "<request>" [--apply]
+            let id = args.get(2)?.clone();
+            let at = args.get(3).map(|t| {
+                let (m, sec) = t.split_once(':').unwrap_or(("0", t));
+                m.parse::<f64>().unwrap_or(0.0) * 60.0 + sec.parse::<f64>().unwrap_or(0.0)
+            }).unwrap_or(0.0);
+            let req = args.get(4)?.clone();
+            let mut p = story::load(&id).ok()?;
+            match edit::interpret(&p, at, &req) {
+                Ok(plan) => {
+                    println!("{}", serde_json::to_string_pretty(&plan).unwrap_or_default());
+                    if args.iter().any(|a| a == "--apply") {
+                        match edit::apply(&mut p, &plan) {
+                            Ok(note) => { story::save(&mut p).ok()?; println!("APPLIED: {note} (run --render to regenerate)"); }
+                            Err(err) => { eprintln!("{err}"); return Some(1); }
+                        }
+                    }
+                    Some(0)
+                }
+                Err(err) => { eprintln!("{err}"); Some(1) }
+            }
+        }
         Some("--list") => {
             for p in story::list() {
                 println!("{}  {}  ({} lines)", p["id"].as_str().unwrap_or(""), p["title"].as_str().unwrap_or(""), p["lines"]);
@@ -366,7 +443,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let res = app.path().resource_dir().ok();
-            let dir = engine::find_engine_dir(res.as_deref());
+            let saved = settings::load();
+            let dir = Some(std::path::PathBuf::from(&saved.engine_dir))
+                .filter(|d| !saved.engine_dir.is_empty() && d.join("vcstudio").join("server.py").exists())
+                .unwrap_or_else(|| engine::find_engine_dir(res.as_deref()));
             let st = AppState {
                 engine: Arc::new(Engine::new(dir)),
                 renders: Arc::new(render::Renders::default()),
@@ -428,6 +508,7 @@ pub fn run() {
             live_devices, live_start, live_stop, live_state,
             story_list, story_get, story_new, story_save, story_delete, story_script, story_from_script,
             story_write, story_render, ollama_models,
+            story_fix_preview, story_fix_apply, story_export, story_use_version, cache_info, cache_clear,
             settings_get, settings_set, copy_file, import_asset
         ])
         .build(tauri::generate_context!())

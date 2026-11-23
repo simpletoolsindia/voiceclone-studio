@@ -271,7 +271,7 @@ def chunk_text(text: str, max_chars: int = 220) -> list[str]:
 
 def speak(store: VoiceStore, vid: Optional[str], text: str, language: str = "ta", mode: str = "auto",
           speed: Optional[float] = None, steps: int = 32, vc_steps: int = 30, pause_ms: int = 350,
-          progress: Progress = None) -> tuple[np.ndarray, int]:
+          progress: Progress = None, take: int = 0) -> tuple[np.ndarray, int]:
     """Text to speech in a cloned voice.
 
     modes:
@@ -302,13 +302,13 @@ def speak(store: VoiceStore, vid: Optional[str], text: str, language: str = "ta"
         wav = None
         if mode in ("direct", "auto") and prompt is not None:
             neutral = None
-            for seed in (1, 7, 23):
+            for seed in (1 + take * 101, 7 + take * 101, 23 + take * 101):
                 cand, _ = tts_engine.synthesize(chunk, prompt, language, speed=speed, num_step=steps, seed=seed)
                 if mode == "direct":
                     wav = cand
                     break
                 if neutral is None:
-                    neutral, _ = tts_engine.synthesize(chunk, None, language, speed=speed, num_step=steps, seed=1)
+                    neutral, _ = tts_engine.synthesize(chunk, None, language, speed=speed, num_step=steps, seed=1 + take * 101)
                 ratio = len(cand) / max(1, len(neutral))
                 if 0.6 <= ratio <= 1.7 and _looks_like_speech(cand, sr):
                     wav = cand
@@ -316,7 +316,7 @@ def speak(store: VoiceStore, vid: Optional[str], text: str, language: str = "ta"
             if wav is None and mode == "auto":
                 wav = _to_voice(vcm, vref, neutral, sr, vc_steps)
         if wav is None:  # stable mode, or no voice selected
-            base, _ = tts_engine.synthesize(chunk, None, language, speed=speed, num_step=steps, seed=1)
+            base, _ = tts_engine.synthesize(chunk, None, language, speed=speed, num_step=steps, seed=1 + take * 101)
             wav = _to_voice(vcm, vref, base, sr, vc_steps) if vref is not None else base
         pieces += [wav, gap]
     p(1.0, "Done")

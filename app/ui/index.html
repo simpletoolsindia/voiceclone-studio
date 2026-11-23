@@ -27,6 +27,24 @@
   <main>
     <!-- ======================= STORY STUDIO ======================= -->
     <section id="page-studio" class="page active">
+      <div id="setupCard" class="card setup-card hidden">
+        <h2>👋 Welcome to VoiceClone Studio — one-time setup</h2>
+        <p class="muted">The AI engine (voices, images, animation) runs on your own GPU. Click once and it installs everything it needs:
+          Python, PyTorch for your NVIDIA GPU and the open-source models. It downloads about <b>25–60 GB</b> and takes 20–60 minutes, only once.</p>
+        <div class="row">
+          <label class="switch"><input type="checkbox" id="setupTalking" checked /><span></span>Talking faces (fast mode)</label>
+          <label class="switch"><input type="checkbox" id="setupCine" checked /><span></span>Cinematic animation + lip-sync</label>
+        </div>
+        <div class="actions"><button class="primary big" id="setupGo">⬇ Set up AI engine</button>
+          <button class="ghost" id="setupHave">I already have an engine folder…</button></div>
+        <div id="setupProgress" class="hidden">
+          <div class="render-stage" id="setupStage">Starting…</div>
+          <div class="progress big"><div id="setupBar"></div></div>
+          <div class="muted small" id="setupMeta"></div>
+          <pre class="log" id="setupLog"></pre>
+        </div>
+      </div>
+
       <div id="studioHome">
         <header class="page-head">
           <div>
@@ -85,29 +103,69 @@ Narrator: ஒரு ஊர்ல ஒரு பாட்டி இருந்த
         </header>
 
         <div id="renderPanel" class="card render-panel hidden">
-          <div class="render-row">
+          <div class="rp-head">
+            <div class="rp-ring" id="rRing"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="rp-track"/><circle cx="60" cy="60" r="52" class="rp-arc" id="rArc"/></svg><div class="rp-pct" id="rPct">0%</div></div>
             <div class="grow">
-              <div class="render-stage" id="rStage">Starting…</div>
+              <div class="rp-title">Rendering your video</div>
+              <div class="render-stage" id="rStage">Preparing…</div>
               <div class="progress big"><div id="rBar"></div></div>
-              <div class="muted small" id="rMeta"></div>
+              <div class="rp-stats" id="rStats"></div>
             </div>
             <button class="ghost" id="rCancel">Cancel</button>
           </div>
-          <p class="muted small">You can keep editing other things or close the window — rendering continues in the background (system tray).</p>
+          <div class="rp-body">
+            <ol class="rp-steps" id="rSteps"></ol>
+            <div class="rp-side">
+              <div class="rp-preview-wrap"><img id="rPreview" class="rp-preview hidden" alt="Now generating" /><div id="rPreviewEmpty" class="rp-preview-empty">Live preview appears here</div><span class="rp-live">● LIVE</span></div>
+              <div class="rp-facts" id="rFacts"></div>
+              <div class="label">Activity</div>
+              <div class="rp-log" id="rLog"></div>
+            </div>
+          </div>
+          <p class="muted small">Keep editing, switch pages or close the window: rendering continues in the background (system tray) and the taskbar icon shows progress.</p>
         </div>
 
         <div id="resultPanel" class="card hidden">
           <div class="result">
-            <video id="resVideo" controls></video>
+            <div class="result-main">
+              <video id="resVideo" controls></video>
+              <div class="label">Shots — click one to jump there and fix it</div>
+              <div class="res-timeline" id="resTimeline"></div>
+            </div>
             <div class="result-side">
               <h2>🎉 Your video is ready</h2>
-              <p class="muted" id="resInfo"></p>
-              <img id="resThumb" class="thumb hidden" alt="YouTube thumbnail" />
-              <div class="actions col">
-                <button class="primary" id="resSave">Save video as…</button>
-                <button id="resThumbSave">Save thumbnail…</button>
-                <button class="ghost" id="resOpen">Show in folder</button>
+              <p class="muted small" id="resInfo"></p>
+              <button class="primary big wide" id="resSave">⬇ Download video (MP4)</button>
+              <div class="dl-grid">
+                <button id="resThumbSave">🖼 Thumbnail</button>
+                <button id="resSrt">💬 Subtitles .srt</button>
+                <button id="resMp3">🎵 Audio .mp3</button>
+                <button id="resShorts">📱 Shorts teaser</button>
               </div>
+              <button class="ghost small" id="resOpen">📂 Show in folder</button>
+              <img id="resThumb" class="thumb hidden" alt="YouTube thumbnail" />
+            </div>
+          </div>
+
+          <div class="fix-box">
+            <h3>✏️ Fix or improve something</h3>
+            <p class="muted small">Say what to change in plain words — only that part is regenerated, everything else is reused.</p>
+            <div class="fix-row">
+              <label class="time-chip">At <input id="fixAt" value="0:00" /></label>
+              <button class="ghost small" id="fixNow">⏱ Use current time</button>
+              <input id="fixReq" class="grow" placeholder="e.g. change Appa's shirt to blue · fix the lip-sync · say “…” instead · make the background daytime · re-record slower" />
+              <button class="primary" id="fixPreview">Preview change</button>
+            </div>
+            <div class="chips" id="fixChips"></div>
+            <div id="fixPlan" class="fix-plan hidden"></div>
+          </div>
+
+          <div class="res-bottom">
+            <div>
+              <div class="label">Versions</div>
+              <div id="resVersions" class="versions"></div>
+            </div>
+            <div>
               <div class="label">YouTube description (chapters + hashtags)</div>
               <textarea id="resDesc" rows="6" class="mono" readonly></textarea>
               <div class="actions"><button class="ghost small" id="resDescCopy">Copy description</button></div>
@@ -254,6 +312,8 @@ Narrator: ஒரு ஊர்ல ஒரு பாட்டி இருந்த
             <button id="engInstall">Install / repair engine</button>
             <label class="switch inline"><input type="checkbox" id="engTalking" checked /><span></span>include talking faces</label>
           </div>
+          <label>Engine folder <span class="hint">(leave empty to use the built-in one)</span>
+            <div class="file-row"><span id="engDir" class="muted">Built-in</span><button class="ghost small" id="engDirPick">Choose…</button><button class="ghost small" id="engDirClear">✕</button></div></label>
           <div class="actions"><button class="ghost" id="engRestart">Restart engine</button><button class="ghost" id="engUnload">Free GPU memory</button><button class="ghost" id="engData">Open data folder</button></div>
           <pre id="engLog" class="log"></pre>
         </div>
@@ -266,6 +326,13 @@ Narrator: ஒரு ஊர்ல ஒரு பாட்டி இருந்த
           <label>MiniMax API key <input id="sMinimax" type="password" autocomplete="off" /></label>
           <label>Model <select id="sMmModel"><option>MiniMax-H3-Lite</option><option>MiniMax-H3-Highspeed</option><option>MiniMax-H3</option></select></label>
           <p class="muted small">≈ $0.04–0.08 per second of 768p video. Scenes are animated from your AI scene images; voices stay local.</p>
+          <h2>Channel intro &amp; outro</h2>
+          <p class="muted small">Added to every story video (prepared once, then reused).</p>
+          <div class="file-row"><span id="sIntro" class="muted">No intro</span><button class="ghost small" id="sIntroPick">Choose…</button><button class="ghost small" id="sIntroClear">✕</button></div>
+          <div class="file-row" style="margin-top:6px"><span id="sOutro" class="muted">No outro</span><button class="ghost small" id="sOutroPick">Choose…</button><button class="ghost small" id="sOutroClear">✕</button></div>
+          <h2>Cache</h2>
+          <p class="muted small" id="sCache">Repeated voices, faces, scenes, shots and lip-syncs are reused from the cache.</p>
+          <div class="actions"><button class="ghost small" id="sCacheClear">Clear cache</button></div>
           <h2>App</h2>
           <label class="switch"><input type="checkbox" id="sTray" /><span></span>Keep running in the background when the window is closed</label>
           <label class="switch"><input type="checkbox" id="sAuto" /><span></span>Start the AI engine automatically</label>

@@ -84,6 +84,10 @@ pub struct Segment {
     pub fade_out: bool,
     pub motion: u32,
     pub chapter: Option<String>,
+    /// provenance, used for the editable timeline ("at 1:22 fix ...")
+    pub scene_id: Option<String>,
+    pub line_id: Option<String>,
+    pub label: String,
 }
 
 pub struct Sfx {
@@ -628,7 +632,7 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
     let blank = Segment {
         kind: SegKind::Line, shot: Shot::Full, background: None, clip: None, speaker: None, listener: None,
         audio: None, duration: 1.0, text: String::new(), emoji: None, ambience: None, sfx: vec![],
-        fade_in: false, fade_out: false, motion: 0, chapter: None,
+        fade_in: false, fade_out: false, motion: 0, chapter: None, scene_id: None, line_id: None, label: String::new(),
     };
     let line_seg = |si: usize, li: usize, motion: u32, shot_hint: Shot, prev: Option<&str>, next: Option<&str>| -> Option<Segment> {
         let sc = &p.scenes[si];
@@ -663,7 +667,9 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
             shot, background: bg, clip,
             emoji: if speaker.is_some() { emoji_for(&l.emotion, &l.text).and_then(|e| emoji_png(e)) } else { None },
             speaker, listener, audio: Some(PathBuf::from(audio)), duration: l.duration.max(0.6) + pause,
-            text: l.text.clone(), ambience: ambience_for(&sc.visual, &sc.title, sfx), motion, ..blank.clone()
+            text: l.text.clone(), ambience: ambience_for(&sc.visual, &sc.title, sfx), motion,
+            scene_id: Some(sc.id.clone()), line_id: Some(l.id.clone()),
+            label: if c.is_narrator { "Narrator".into() } else { c.name.clone() }, ..blank.clone()
         })
     };
 
@@ -681,6 +687,7 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
             s.fade_out = true;
             s.ambience = None;
             s.chapter = Some("தொடக்கம்".into());
+            s.label = format!("Hook: {}", s.label);
             segs.push(s);
         }
     }
@@ -690,7 +697,7 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
     segs.push(Segment {
         kind: SegKind::Title { title: p.title.clone(), subtitle: p.logline.clone() },
         background: first_bg, duration: 3.6, fade_in: true, fade_out: true,
-        sfx: vec![(sfx.ding.clone(), 0.25, 0.45)], chapter: title_chapter, ..blank.clone()
+        sfx: vec![(sfx.ding.clone(), 0.25, 0.45)], chapter: title_chapter, label: "Title card".into(), ..blank.clone()
     });
     let mut motion = 1;
     for (si, sc) in p.scenes.iter().enumerate() {
@@ -701,7 +708,7 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
             segs.push(Segment {
                 kind: SegKind::SceneCard { title: sc.title.clone() }, background: bg.clone(), duration: 2.2,
                 fade_in: true, ambience: amb.clone(), sfx: vec![(sfx.whoosh.clone(), 0.0, 0.55)],
-                motion, chapter: chapter.take(), ..blank.clone()
+                motion, chapter: chapter.take(), scene_id: Some(sc.id.clone()), label: "Scene card".into(), ..blank.clone()
             });
             motion += 1;
         }
@@ -715,7 +722,8 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
                     kind: SegKind::Question { text: line.text.clone() }, background: bg.clone(), duration: 4.2,
                     fade_in: true, ambience: amb.clone(),
                     sfx: vec![(sfx.pop.clone(), 0.1, 0.4), (sfx.tick.clone(), 0.8, 0.6), (sfx.tick.clone(), 1.8, 0.6), (sfx.tick.clone(), 2.8, 0.6)],
-                    chapter: chapter.take(), ..blank.clone()
+                    chapter: chapter.take(), scene_id: Some(sc.id.clone()), line_id: Some(line.id.clone()),
+                    label: "Viewer question".into(), ..blank.clone()
                 });
                 continue;
             }
@@ -726,7 +734,8 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
                     segs.push(Segment {
                         kind: SegKind::Line, shot: Shot::Full, clip, background: img.or(bg.clone()), duration: 3.0,
                         ambience: amb.clone(), sfx: vec![(sfx.whoosh.clone(), 0.0, 0.25)], motion,
-                        chapter: chapter.take(), ..blank.clone()
+                        chapter: chapter.take(), scene_id: Some(sc.id.clone()), line_id: Some(line.id.clone()),
+                        label: "Close-up".into(), text: line.text.clone(), ..blank.clone()
                     });
                     motion += 1;
                 }
@@ -761,7 +770,7 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
         kind: SegKind::EndCard { question: "இந்தக் கதையில உங்களுக்கு பிடிச்ச கேரக்டர் யாரு?".into() },
         background: last_bg, duration: 6.0, fade_in: true, fade_out: true,
         sfx: vec![(sfx.whoosh.clone(), 0.0, 0.5), (sfx.pop.clone(), 1.0, 0.45)],
-        chapter: Some("முடிவு".into()), ..blank.clone()
+        chapter: Some("முடிவு".into()), label: "End card".into(), ..blank.clone()
     });
     segs
 }
@@ -798,4 +807,82 @@ pub fn youtube_description(p: &Project, segs: &[Segment]) -> String {
     out += "This video was made with AI tools (voices, images and animation).\n\n";
     out += "#TamilStories #தமிழ்கதைகள் #TamilKathaigal #MoralStories #TamilCartoon #StoryTime";
     out
+}
+
+
+/// Editable timeline: one entry per shot with its time range and provenance.
+pub fn timeline(segs: &[Segment]) -> Vec<serde_json::Value> {
+    let mut t = 0.0;
+    segs.iter().map(|s| {
+        let d = s.duration.max(0.5);
+        let kind = match &s.kind {
+            SegKind::Title { .. } => "title", SegKind::SceneCard { .. } => "scene", SegKind::EndCard { .. } => "end",
+            SegKind::Question { .. } => "question",
+            SegKind::Line => if s.label == "Close-up" { "insert" } else if s.speaker.is_some() || s.shot == Shot::Clip { "dialogue" } else { "narration" },
+        };
+        let v = serde_json::json!({"start": (t * 100.0_f64).round() / 100.0, "end": ((t + d) * 100.0_f64).round() / 100.0,
+            "kind": kind, "label": s.label, "text": s.text, "scene_id": s.scene_id, "line_id": s.line_id,
+            "hook": s.label.starts_with("Hook:")});
+        t += d;
+        v
+    }).collect()
+}
+
+/// Tamil subtitles (.srt) for YouTube closed captions.
+pub fn srt(segs: &[Segment]) -> String {
+    let ts = |x: f64| {
+        let ms = (x * 1000.0).round() as u64;
+        format!("{:02}:{:02}:{:02},{:03}", ms / 3_600_000, (ms / 60_000) % 60, (ms / 1000) % 60, ms % 1000)
+    };
+    let mut out = String::new();
+    let (mut t, mut n) = (0.0, 1);
+    for s in segs {
+        let d = s.duration.max(0.5);
+        if s.kind == SegKind::Line && !s.text.is_empty() && s.label != "Close-up" {
+            out += &format!("{n}\n{} --> {}\n{}\n\n", ts(t + 0.05), ts(t + d - 0.3), s.text);
+            n += 1;
+        }
+        t += d;
+    }
+    out
+}
+
+
+/// Everything that affects a composed shot, so identical shots are reused from the cache.
+pub fn segment_key(s: &Segment, l: &Layout, subtitles: bool, nvenc: bool) -> String {
+    let sig = |p: &Option<PathBuf>| p.as_ref().and_then(|p| std::fs::metadata(p).ok()
+        .map(|m| format!("{}:{}:{:?}", p.display(), m.len(), m.modified().ok()))).unwrap_or_default();
+    let actor = |a: &Option<Actor>| a.as_ref().map(|a| format!("{}|{}|{}|{}", sig(&a.video), sig(&Some(a.image.clone())), sig(&a.mask), a.right)).unwrap_or_default();
+    let kind = match &s.kind {
+        SegKind::Title { title, subtitle } => format!("T|{title}|{subtitle}"),
+        SegKind::SceneCard { title } => format!("S|{title}"),
+        SegKind::Line => "L".into(),
+        SegKind::EndCard { question } => format!("E|{question}"),
+        SegKind::Question { text } => format!("Q|{text}"),
+    };
+    let sfx: Vec<String> = s.sfx.iter().map(|(f, a, v)| format!("{}@{a}x{v}", f.display())).collect();
+    format!("seg-v3|{}x{}|{subtitles}|{nvenc}|{kind}|{:?}|{}|{}|{}|{}|{}|{:.3}|{}|{}|{}|{}|{}|{}|{}",
+        l.w, l.h, s.shot as u8, sig(&s.background), sig(&s.clip), actor(&s.speaker), actor(&s.listener), sig(&s.audio),
+        s.duration, s.text, sig(&s.emoji), sig(&s.ambience), sfx.join(","), s.fade_in, s.fade_out, s.motion)
+}
+
+/// Re-encode an external clip (channel intro / outro) to the segment format.
+pub fn normalize_clip(src: &Path, out: &Path, l: &Layout, nvenc: bool) -> Result<()> {
+    let mut cmd = Command::new(ffmpeg());
+    cmd.args(["-y", "-v", "error", "-i"]).arg(src).args(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+        "-filter_complex", &format!("[0:v]fps={FPS},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[v];[0:a][1:a]amix=inputs=2:duration=first:normalize=0,aresample=48000,aformat=channel_layouts=stereo[a]", w = l.w, h = l.h),
+        "-map", "[v]", "-map", "[a]", "-r", &FPS.to_string()]);
+    cmd.args(venc(nvenc));
+    cmd.args(["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart"]).arg(out);
+    if run(&mut cmd).is_ok() {
+        return Ok(());
+    }
+    // clips without an audio track
+    let mut cmd = Command::new(ffmpeg());
+    cmd.args(["-y", "-v", "error", "-i"]).arg(src).args(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+        "-filter_complex", &format!("[0:v]fps={FPS},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[v]", w = l.w, h = l.h),
+        "-map", "[v]", "-map", "1:a", "-shortest", "-r", &FPS.to_string()]);
+    cmd.args(venc(nvenc));
+    cmd.args(["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart"]).arg(out);
+    run(&mut cmd)
 }

@@ -71,19 +71,46 @@ def keyframe(plate: str, actors: list[dict], size: tuple[int, int], out: str) ->
 
 
 # ------------------------------------------------------------------ LTX image-to-video
-def _encode(prompts: list[str]) -> list[tuple[torch.Tensor, torch.Tensor]]:
-    from transformers import T5EncoderModel, T5TokenizerFast
+def _t5_cache_dir() -> Path:
+    from .config import data_dir
+    d = data_dir() / "cache" / "t5"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
-    tok = T5TokenizerFast.from_pretrained(LTX_REPO, subfolder="tokenizer")
-    te = T5EncoderModel.from_pretrained(LTX_REPO, subfolder="text_encoder", torch_dtype=torch.bfloat16).to("cuda")
-    out = []
-    with torch.no_grad():
-        for p in prompts:
-            ids = tok(p, padding="max_length", max_length=128, truncation=True, return_tensors="pt").to("cuda")
-            out.append((te(ids.input_ids, attention_mask=ids.attention_mask)[0], ids.attention_mask))
-    del te
-    gc.collect()
-    torch.cuda.empty_cache()
+
+def _encode(prompts: list[str]) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    """T5 prompt embeddings, cached on disk so the 9.5 GB text encoder is only
+    loaded when a prompt has never been seen before."""
+    import hashlib
+
+    keys = [hashlib.sha1(("ltx-t5-v1|" + p).encode("utf-8")).hexdigest() for p in prompts]
+    cache = _t5_cache_dir()
+    out: list = [None] * len(prompts)
+    missing = []
+    for i, k in enumerate(keys):
+        f = cache / f"{k}.pt"
+        if f.exists():
+            try:
+                d = torch.load(f, map_location="cuda", weights_only=True)
+                out[i] = (d["e"], d["m"])
+                continue
+            except Exception:
+                pass
+        missing.append(i)
+    if missing:
+        from transformers import T5EncoderModel, T5TokenizerFast
+
+        tok = T5TokenizerFast.from_pretrained(LTX_REPO, subfolder="tokenizer")
+        te = T5EncoderModel.from_pretrained(LTX_REPO, subfolder="text_encoder", torch_dtype=torch.bfloat16).to("cuda")
+        with torch.no_grad():
+            for i in missing:
+                ids = tok(prompts[i], padding="max_length", max_length=128, truncation=True, return_tensors="pt").to("cuda")
+                e, m = te(ids.input_ids, attention_mask=ids.attention_mask)[0], ids.attention_mask
+                out[i] = (e, m)
+                torch.save({"e": e.cpu(), "m": m.cpu()}, cache / f"{keys[i]}.pt")
+        del te
+        gc.collect()
+        torch.cuda.empty_cache()
     return out
 
 
@@ -141,7 +168,7 @@ def i2v_many(shots: list[dict], progress: Optional[Callable[[float, str], None]]
             span = 0.95 / n
 
             def cb(_pipe, step, _t, kw, base=base, span=span, i=i):
-                p(base + span * (step + 1) / len(DISTILLED_TIMESTEPS), f"Animating shot {i + 1} of {n}")
+                p(base + span * (step + 1) / len(DISTILLED_TIMESTEPS), f"Animating shot {i + 1} of {n}", s["image"])
                 return kw
 
             try:
@@ -197,7 +224,10 @@ def lipsync_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
             if parts[0] == "PROGRESS" and len(parts) >= 3:
                 p(0.02 + 0.97 * int(parts[1]) / max(1, int(parts[2])), parts[3] if len(parts) > 3 else "")
             elif parts[0] == "RESULT":
-                results[int(parts[1])] = line.strip().split(" ", 2)[2]
+                k = int(parts[1])
+                results[k] = line.strip().split(" ", 2)[2]
+                if jobs[k].get("image"):
+                    p(0.02 + 0.97 * (k + 1) / max(1, len(jobs)), "", jobs[k]["image"])
         proc.wait()
     except BaseException:
         proc.kill()

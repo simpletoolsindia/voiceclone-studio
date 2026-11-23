@@ -168,7 +168,7 @@ impl Live {
 
         // Network/inference task.
         let sh = shared.clone();
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             if let Err(e) = stream_loop(&sh, ws_url, p, in_sr, out_sr).await {
                 *sh.error.lock().unwrap() = Some(e.to_string());
                 *sh.status.lock().unwrap() = "error".into();

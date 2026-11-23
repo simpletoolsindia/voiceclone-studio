@@ -170,8 +170,20 @@ impl Engine {
         &self,
         path: &str,
         body: Value,
+        on_progress: F,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Value> {
+        self.run_job_pv(path, body, on_progress, cancelled, &|_: &str| {}).await
+    }
+
+    /// Like `run_job`, also reporting the job's live preview image path.
+    pub async fn run_job_pv<F: FnMut(f64, &str)>(
+        &self,
+        path: &str,
+        body: Value,
         mut on_progress: F,
         cancelled: &(dyn Fn() -> bool + Sync),
+        preview: &(dyn Fn(&str) + Sync),
     ) -> Result<Value> {
         let job = self.request("POST", path, Some(body)).await?;
         let id = job["id"].as_str().ok_or_else(|| anyhow!("no job id"))?.to_string();
@@ -183,6 +195,9 @@ impl Engine {
             }
             let j = self.request("GET", &format!("/jobs/{id}"), None).await?;
             on_progress(j["progress"].as_f64().unwrap_or(0.0), j["stage"].as_str().unwrap_or(""));
+            if let Some(pv) = j["preview"].as_str() {
+                preview(pv);
+            }
             match j["status"].as_str().unwrap_or("") {
                 "done" => return Ok(j["result"].clone()),
                 "error" => return Err(anyhow!(j["error"].as_str().unwrap_or("job failed").to_string())),
@@ -212,7 +227,8 @@ pub fn find_engine_dir(resource_dir: Option<&Path>) -> PathBuf {
     let data = crate::paths::data_dir().join("engine");
     if let Some(res) = resource_dir {
         let bundled = res.join("engine");
-        if bundled.join("vcstudio").exists() && !data.join("vcstudio").exists() {
+        if bundled.join("vcstudio").exists() {
+            // refresh the engine code on every start so app updates also update the engine
             let _ = copy_dir(&bundled, &data);
         }
     }

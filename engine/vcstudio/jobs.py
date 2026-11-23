@@ -32,6 +32,7 @@ class Job:
     started: Optional[float] = None
     finished: Optional[float] = None
     result: Any = None
+    preview: Optional[str] = None      # image of what is being generated right now
     error: Optional[str] = None
     cancel_requested: bool = False
 
@@ -101,12 +102,14 @@ class JobQueue:
                 job, fn = self._pending.pop(0)
             job.status, job.started, job.stage = "running", time.time(), "Starting"
 
-            def progress(frac: float, stage: str = "", _job=job):
+            def progress(frac: float, stage: str = "", preview: Optional[str] = None, _job=job):
                 if _job.cancel_requested:
                     raise Cancelled()
                 _job.progress = max(_job.progress, min(1.0, float(frac)))
                 if stage:
                     _job.stage = stage
+                if preview:
+                    _job.preview = str(preview)
 
             try:
                 job.result = fn(progress)
@@ -125,6 +128,6 @@ queue = JobQueue()
 
 def sub_progress(progress: Callable[[float, str], None], start: float, end: float):
     """Map a child task's 0..1 progress into [start, end] of the parent."""
-    def p(frac: float, stage: str = ""):
-        progress(start + (end - start) * max(0.0, min(1.0, frac)), stage)
+    def p(frac: float, stage: str = "", preview: Optional[str] = None):
+        progress(start + (end - start) * max(0.0, min(1.0, frac)), stage, preview)
     return p

@@ -38,7 +38,7 @@
     },
     "shortDescription": "Voice cloning and Tamil story video studio",
     "longDescription": "Clone voices into portable checkpoints, speak text in cloned voices, convert recordings and live microphone audio, and turn Tamil stories into narrated character videos. Runs locally on your GPU.",
-    "category": "AudioVideo",
+    "category": "Video",
     "license": "GPL-3.0-or-later"
   }
 }

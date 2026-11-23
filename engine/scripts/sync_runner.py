@@ -62,8 +62,8 @@ def main():
             out = job["out"]
             os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
             pipe(video_path=job["video"], audio_path=job["audio"], video_out_path=out,
-                 num_frames=config.data.num_frames, num_inference_steps=int(spec.get("steps", 20)),
-                 guidance_scale=float(spec.get("guidance", 1.5)), weight_dtype=dtype,
+                 num_frames=config.data.num_frames, num_inference_steps=int(job.get("steps", spec.get("steps", 20))),
+                 guidance_scale=float(job.get("guidance", spec.get("guidance", 1.5))), weight_dtype=dtype,
                  width=config.data.resolution, height=config.data.resolution,
                  mask_image_path=config.data.mask_image_path, temp_dir=tmp)
             shutil.rmtree(tmp, ignore_errors=True)

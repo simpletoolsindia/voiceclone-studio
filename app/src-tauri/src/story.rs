@@ -54,6 +54,15 @@ pub struct Line {
     /// Finished cinematic shot for a dialogue line: animated keyframe + lip-sync
     #[serde(default)]
     pub shot_video: Option<String>,
+    /// Bumped by "regenerate": new random seeds for voice / animation
+    #[serde(default)]
+    pub take: u32,
+    /// Lip-sync strength boost requested by the user (stronger guidance, more steps)
+    #[serde(default)]
+    pub sync_boost: bool,
+    /// Optional speaking speed for this line (e.g. 0.85 slower, 1.15 faster)
+    #[serde(default)]
+    pub speed: Option<f64>,
 }
 fn d_kind() -> String { "dialogue".into() }
 
@@ -115,6 +124,15 @@ pub struct Project {
     /// YouTube description (chapters, hashtags) written by the last render
     #[serde(default)]
     pub description: String,
+    /// Shot timeline of the last render (for "fix at 1:22")
+    #[serde(default)]
+    pub timeline: Vec<serde_json::Value>,
+    /// Earlier renders: [{path, time, note}]
+    #[serde(default)]
+    pub versions: Vec<serde_json::Value>,
+    /// Note describing what the next render changes (set by fixes)
+    #[serde(default)]
+    pub pending_note: String,
     #[serde(default)]
     pub updated: u64,
 }
@@ -134,7 +152,7 @@ impl Project {
             id: new_id(), title: title.into(), logline: String::new(), language: d_lang(),
             format: d_format(), style: d_style(), characters: vec![], scenes: vec![], music: None,
             music_volume: d_music_vol(), background_image: None, subtitles: true, talking_faces: true, cinematic: true,
-            use_minimax: false, thumbnail_prompt: String::new(), output: None, description: String::new(), updated: now(),
+            use_minimax: false, thumbnail_prompt: String::new(), output: None, description: String::new(), timeline: vec![], versions: vec![], pending_note: String::new(), updated: now(),
         }
     }
 
@@ -187,6 +205,9 @@ pub fn guess_preset(name: &str) -> &'static str {
     else if has(&["அக்கா", "akka", "girl", "பெண்", "தங்கை", "thangachi", "ponnu"]) { "girl" }
     else if has(&["பையன்", "boy", "teen", "student", "payyan"]) { "boy" }
     else if has(&["narrator", "கதைசொல்லி", "storyteller"]) { "grandma" }
+    else if has(&["முயல்", "rabbit", "bunny", "கிளி", "parrot", "அணில்", "squirrel", "குருவி", "sparrow", "பூனை", "kitten", "நாய்க்குட்டி", "puppy", "மீன்", "fish", "சுட்டி"]) { "child_boy" }
+    else if has(&["நிலா", "moon", "நட்சத்திர", "star", "பட்டாம்பூச்சி", "butterfly", "தேவதை", "fairy"]) { "child_girl" }
+    else if has(&["யானை", "elephant", "ஆமை", "tortoise", "ஆந்தை", "owl", "மரம்", "tree"]) { "grandpa" }
     else { "man" }
 }
 
@@ -396,6 +417,7 @@ SCREENPLAY CRAFT - this matters more than anything:
 
 FIELDS:
 - dialogue lines: "speaker" = character name, "emotion" = one English word (happy, excited, surprised, sad, angry, curious, scared, warm, playful, thinking, nostalgic...), "action" = what the speaker physically does while talking, in English, visual and specific ("reaches for the tablet", "points at the photo", "claps her hands"). Actions involve only the speaker and objects - never touching or bringing in other people (each shot shows at most the speaker and one listener).
+- Animals, birds, toys and magical beings (a rabbit, a parrot, the moon...) are characters too: give small/young ones child_boy or child_girl, wise or old ones grandpa or grandma, and vary them so no two characters share a voice. Never create a character for the narrator's moral, the title or a sound effect.
 - For each character choose the voice preset matching age and gender: man, girl, boy, aunty, uncle, grandpa, grandma, child_boy, child_girl. Include the Narrator in "characters" (man for a dramatic storyteller, grandma for a cosy one) with a preset no other character uses.
 - "look" (English): concise visual description for an image generator - age, face, hair, clothing, one distinctive feature.
 - "visual" (English): one vivid sentence describing the scene's location, time of day, light and mood with Tamil Nadu details. Describe the place; no text in images.
