@@ -1,0 +1,28 @@
+# VoiceClone Studio engine (Python 3.11). PyTorch is installed separately by
+# scripts/setup_engine.ps1 from the CUDA index; versions are pinned in constraints.txt.
+omnivoice==0.2.1
+diffusers==0.43.0
+transformers>=5.3
+accelerate
+huggingface-hub
+safetensors
+numpy
+scipy
+librosa
+soundfile
+sounddevice
+pydub
+munch
+einops
+descript-audio-codec==1.0.0
+hydra-core
+pyyaml
+python-dotenv
+resemblyzer
+jiwer
+pillow
+fastapi
+uvicorn[standard]
+python-multipart
+websockets
+setuptools<80

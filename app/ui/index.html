@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VoiceClone Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      <div><strong>VoiceClone</strong><small>Studio</small></div>
+    </div>
+    <nav>
+      <button data-page="studio" class="active"><i>🎬</i>Story Studio</button>
+      <button data-page="voices"><i>🎙️</i>Voices</button>
+      <button data-page="tts"><i>💬</i>Text to Speech</button>
+      <button data-page="convert"><i>🔁</i>Convert Audio</button>
+      <button data-page="live"><i>🎧</i>Live Voice</button>
+      <button data-page="jobs"><i>⏳</i>Jobs <b id="jobBadge" class="badge hidden">0</b></button>
+      <button data-page="settings"><i>⚙️</i>Settings</button>
+    </nav>
+    <div class="engine-pill" id="enginePill" title="AI engine status"><span class="dot"></span><span id="engineText">Starting engine…</span></div>
+  </aside>
+
+  <main>
+    <!-- ======================= STORY STUDIO ======================= -->
+    <section id="page-studio" class="page active">
+      <div id="studioHome">
+        <header class="page-head">
+          <div>
+            <h1>Story Studio</h1>
+            <p>Write a Tamil story with AI or paste your own script, give every character a face and a voice, and render a YouTube-ready video.</p>
+          </div>
+        </header>
+
+        <div class="grid two">
+          <div class="card">
+            <h2>✨ Write a new story with AI</h2>
+            <label>Story idea <span class="hint">(Tamil or English)</span>
+              <textarea id="wIdea" rows="3" placeholder="e.g. A clever village girl outsmarts a greedy shopkeeper during Pongal, with a lesson about honesty"></textarea>
+            </label>
+            <div class="row">
+              <label>Length <select id="wMinutes"><option value="1">~1 min (Shorts)</option><option value="3" selected>~3 min</option><option value="5">~5 min</option><option value="8">~8 min</option></select></label>
+              <label>Mood <select id="wGenre"><option value="">Any</option><option>heart-touching family drama</option><option>comedy</option><option>moral story for kids</option><option>village folk tale</option><option>suspense / mystery</option><option>romance (family friendly)</option><option>motivational</option></select></label>
+              <label>Writer <select id="wProvider"><option value="ollama">Local (Ollama, offline)</option><option value="claude">Claude (best Tamil, API key)</option></select></label>
+            </div>
+            <div class="label">Characters to include</div>
+            <div class="chips" id="wChars"></div>
+            <div class="actions"><button class="primary" id="wGo">Write story</button><span class="muted" id="wStatus"></span></div>
+          </div>
+
+          <div class="card">
+            <h2>📋 Paste or share a script</h2>
+            <textarea id="pasteScript" rows="9" class="mono" placeholder="# கதை தலைப்பு
+@பாட்டி = grandma | kind elderly woman, silver hair, cotton saree
+@கவின் = child_boy
+[Scene: காலை | misty village street at sunrise, kolam at doorsteps]
+Narrator: ஒரு ஊர்ல ஒரு பாட்டி இருந்தாங்க...
+பாட்டி (warm): வாடா கண்ணு, சாப்பிட்டியா?
+கவின் (excited): இல்ல பாட்டி! கதை சொல்லுங்க!"></textarea>
+            <div class="actions"><button id="pasteGo">Create story from script</button><button class="ghost" id="scriptHelp">Script format help</button></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>📚 Your stories</h2><button class="ghost" id="newBlank">+ Blank story</button></div>
+          <div id="storyList" class="story-list"></div>
+        </div>
+      </div>
+
+      <!-- editor -->
+      <div id="studioEditor" class="hidden">
+        <header class="page-head">
+          <div class="title-edit">
+            <button class="ghost back" id="edBack">← Stories</button>
+            <input id="edTitle" class="title-input" />
+            <input id="edLogline" class="logline-input" placeholder="One-line summary (shown on the title card)" />
+          </div>
+          <div class="head-actions">
+            <button class="ghost" id="edScriptBtn">📝 Script</button>
+            <button class="primary big" id="edRender">🎬 Render video</button>
+          </div>
+        </header>
+
+        <div id="renderPanel" class="card render-panel hidden">
+          <div class="render-row">
+            <div class="grow">
+              <div class="render-stage" id="rStage">Starting…</div>
+              <div class="progress big"><div id="rBar"></div></div>
+              <div class="muted small" id="rMeta"></div>
+            </div>
+            <button class="ghost" id="rCancel">Cancel</button>
+          </div>
+          <p class="muted small">You can keep editing other things or close the window — rendering continues in the background (system tray).</p>
+        </div>
+
+        <div id="resultPanel" class="card hidden">
+          <div class="result">
+            <video id="resVideo" controls></video>
+            <div class="result-side">
+              <h2>🎉 Your video is ready</h2>
+              <p class="muted" id="resInfo"></p>
+              <img id="resThumb" class="thumb hidden" alt="YouTube thumbnail" />
+              <div class="actions col">
+                <button class="primary" id="resSave">Save video as…</button>
+                <button id="resThumbSave">Save thumbnail…</button>
+                <button class="ghost" id="resOpen">Show in folder</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid editor-grid">
+          <div class="col-main">
+            <div class="card">
+              <div class="card-head"><h2>🎭 Characters</h2><button class="ghost" id="addChar">+ Character</button></div>
+              <div id="charList" class="char-list"></div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h2>🎞️ Scenes & dialogue</h2><button class="ghost" id="addScene">+ Scene</button></div>
+              <div id="sceneList"></div>
+            </div>
+          </div>
+
+          <div class="col-side">
+            <div class="card sticky">
+              <h2>🎨 Video settings</h2>
+              <label>Format
+                <div class="seg" id="edFormat"><button data-v="landscape">YouTube 16:9</button><button data-v="shorts">Shorts 9:16</button></div>
+              </label>
+              <label>Look
+                <div class="seg" id="edStyle"><button data-v="animated">3D animated</button><button data-v="cinematic">Cinematic</button><button data-v="storybook">Storybook</button></div>
+              </label>
+              <label class="switch"><input type="checkbox" id="edTalking" /><span></span>Talking faces (lip-sync)</label>
+              <label class="switch"><input type="checkbox" id="edSubs" /><span></span>Tamil subtitles</label>
+              <label class="switch"><input type="checkbox" id="edMinimax" /><span></span>MiniMax H3 cinematic scenes <em class="hint">(cloud, paid)</em></label>
+              <hr />
+              <div class="label">Background music</div>
+              <div class="file-row"><span id="edMusicName" class="muted">None</span><button class="ghost small" id="edMusicPick">Choose…</button><button class="ghost small" id="edMusicClear">✕</button></div>
+              <label>Music volume <input type="range" id="edMusicVol" min="0" max="0.4" step="0.01" /></label>
+              <div class="label">Default background image</div>
+              <div class="file-row"><span id="edBgName" class="muted">Auto (AI scenes)</span><button class="ghost small" id="edBgPick">Choose…</button><button class="ghost small" id="edBgClear">✕</button></div>
+              <hr />
+              <div class="muted small" id="edStats"></div>
+              <button class="danger ghost small" id="edDelete">Delete story</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= VOICES ======================= -->
+    <section id="page-voices" class="page">
+      <header class="page-head"><div><h1>Voices</h1><p>Clone a voice from any MP3/WAV, or use the built-in Tamil character voices. Every voice is a portable <code>.vcpt</code> checkpoint you can download, share and upload.</p></div></header>
+      <div class="grid two">
+        <div class="card">
+          <h2>🧬 Clone a voice</h2>
+          <div class="file-row"><span id="cFile" class="muted">No file chosen</span><button id="cPick">Choose audio…</button></div>
+          <div class="row">
+            <label>Name <input id="cName" placeholder="e.g. Amma" /></label>
+            <label>Language <select id="cLang"><option value="ta">Tamil</option><option value="en">English</option><option value="hi">Hindi</option><option value="te">Telugu</option><option value="ml">Malayalam</option><option value="kn">Kannada</option></select></label>
+          </div>
+          <label>Transcript <span class="hint">(optional — exact words of a ≤20 s clip gives the best clone)</span><textarea id="cText" rows="2"></textarea></label>
+          <div class="actions"><button class="primary" id="cGo">Clone voice</button></div>
+          <p class="muted small">Tip: 10–60 seconds of clear speech, no music. The cleanest part is picked automatically.</p>
+        </div>
+        <div class="card">
+          <h2>👨‍👩‍👧 Tamil character voices</h2>
+          <p class="muted">Man, girl, boy, aunty, uncle, grandpa, grandma, child boy and child girl — designed with AI, checked for clarity and pitch, saved as checkpoints. Replace any of them by cloning a real recording.</p>
+          <div class="actions"><button id="presetGo">Create / repair character voices</button><button class="ghost" id="vImport">⬆ Upload checkpoint (.vcpt)</button></div>
+        </div>
+      </div>
+      <div class="card"><h2>Your voices</h2><div id="voiceList" class="voice-list"></div></div>
+    </section>
+
+    <!-- ======================= TTS ======================= -->
+    <section id="page-tts" class="page">
+      <header class="page-head"><div><h1>Text to Speech</h1><p>Type Tamil (or 600+ other languages) and hear it in any cloned voice.</p></div></header>
+      <div class="card">
+        <div class="row">
+          <label>Voice <select id="tVoice" class="voice-select"></select></label>
+          <label>Mode <select id="tMode"><option value="auto">Auto (recommended)</option><option value="direct">Direct clone (most expressive)</option><option value="stable">Stable (most consistent)</option></select></label>
+          <label>Speed <select id="tSpeed"><option value="">Natural</option><option value="0.85">Slower</option><option value="1.15">Faster</option></select></label>
+          <label>Language <select id="tLang"><option value="ta">Tamil</option><option value="en">English</option><option value="hi">Hindi</option><option value="">Auto</option></select></label>
+        </div>
+        <textarea id="tText" rows="7" placeholder="வணக்கம்! இன்னைக்கு உங்களுக்கு ஒரு சூப்பரான கதை சொல்லப் போறேன்."></textarea>
+        <div class="actions"><button class="primary" id="tGo">Speak</button><span class="muted" id="tCount"></span></div>
+        <div id="tOut" class="out hidden"><audio controls id="tAudio"></audio><button class="ghost" id="tSave">Save as…</button></div>
+      </div>
+    </section>
+
+    <!-- ======================= CONVERT ======================= -->
+    <section id="page-convert" class="page">
+      <header class="page-head"><div><h1>Convert Audio</h1><p>Re-voice any recording — a story, podcast or song vocal — in a cloned voice while keeping the original words, timing and emotion.</p></div></header>
+      <div class="card">
+        <div class="file-row"><span id="vFile" class="muted">No file chosen</span><button id="vPick">Choose audio…</button></div>
+        <div class="row">
+          <label>Target voice <select id="vVoice" class="voice-select"></select></label>
+          <label>Quality <select id="vSteps"><option value="25">Fast</option><option value="40" selected>High</option><option value="60">Best (slower)</option></select></label>
+        </div>
+        <div class="actions"><button class="primary" id="vGo">Convert</button></div>
+        <div id="vOut" class="out hidden"><audio controls id="vAudio"></audio><button class="ghost" id="vSave">Save as…</button></div>
+      </div>
+    </section>
+
+    <!-- ======================= LIVE ======================= -->
+    <section id="page-live" class="page">
+      <header class="page-head"><div><h1>Live Voice</h1><p>Speak into your microphone and hear yourself in a cloned voice in real time. Use headphones to avoid feedback.</p></div></header>
+      <div class="grid two">
+        <div class="card">
+          <label>Voice <select id="lVoice" class="voice-select"></select></label>
+          <label>Microphone <select id="lIn"></select></label>
+          <label>Output <select id="lOut"></select></label>
+          <div class="row">
+            <label>Latency <select id="lBlock"><option value="0.18">Low (~0.4 s)</option><option value="0.25" selected>Balanced (~0.55 s)</option><option value="0.4">Smooth (~0.9 s)</option></select></label>
+            <label>Quality <select id="lSteps"><option value="4">Fast</option><option value="8" selected>Balanced</option><option value="12">Best</option></select></label>
+          </div>
+          <label>Noise gate <input type="range" id="lGate" min="-70" max="-30" value="-50" /> <span id="lGateV" class="muted">-50 dB</span></label>
+          <div class="actions"><button class="primary big" id="lStart">▶ Start</button><button class="ghost" id="lStop" disabled>■ Stop</button></div>
+        </div>
+        <div class="card">
+          <h2>Status</h2>
+          <div class="live-status" id="lStatus">Idle</div>
+          <div class="label">Mic level</div><div class="meter"><div id="lMeter"></div></div>
+          <div class="stats"><div><b id="lInfer">–</b><span>GPU ms / block</span></div><div><b id="lLat">–</b><span>latency</span></div><div><b id="lDrop">0</b><span>skipped</span></div></div>
+          <p class="muted small">If "GPU ms / block" is higher than the block length, choose a lower quality or higher latency.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= JOBS ======================= -->
+    <section id="page-jobs" class="page">
+      <header class="page-head"><div><h1>Jobs</h1><p>Everything long runs in the background. GPU jobs run one at a time so they never fight over video memory.</p></div><button class="ghost" id="jobsClear">Clear finished</button></header>
+      <div id="jobList" class="job-list"></div>
+    </section>
+
+    <!-- ======================= SETTINGS ======================= -->
+    <section id="page-settings" class="page">
+      <header class="page-head"><div><h1>Settings</h1></div></header>
+      <div class="grid two">
+        <div class="card">
+          <h2>AI engine</h2>
+          <div id="engInfo" class="muted small"></div>
+          <div class="actions">
+            <button id="engInstall">Install / repair engine</button>
+            <label class="switch inline"><input type="checkbox" id="engTalking" checked /><span></span>include talking faces</label>
+          </div>
+          <div class="actions"><button class="ghost" id="engRestart">Restart engine</button><button class="ghost" id="engUnload">Free GPU memory</button><button class="ghost" id="engData">Open data folder</button></div>
+          <pre id="engLog" class="log"></pre>
+        </div>
+        <div class="card">
+          <h2>Story writer</h2>
+          <label>Default writer <select id="sWriter"><option value="ollama">Local (Ollama)</option><option value="claude">Claude</option></select></label>
+          <label>Local model <select id="sOllama"><option value="">Auto</option></select></label>
+          <label>Anthropic API key <span class="hint">(optional, for Claude)</span><input id="sAnthropic" type="password" placeholder="sk-ant-…" autocomplete="off" /></label>
+          <h2>MiniMax H3 <span class="hint">(optional, paid cloud)</span></h2>
+          <label>MiniMax API key <input id="sMinimax" type="password" autocomplete="off" /></label>
+          <label>Model <select id="sMmModel"><option>MiniMax-H3-Lite</option><option>MiniMax-H3-Highspeed</option><option>MiniMax-H3</option></select></label>
+          <p class="muted small">≈ $0.04–0.08 per second of 768p video. Scenes are animated from your AI scene images; voices stay local.</p>
+          <h2>App</h2>
+          <label class="switch"><input type="checkbox" id="sTray" /><span></span>Keep running in the background when the window is closed</label>
+          <label class="switch"><input type="checkbox" id="sAuto" /><span></span>Start the AI engine automatically</label>
+          <div class="actions"><button class="primary" id="sSave">Save settings</button></div>
+        </div>
+      </div>
+      <p class="muted small center">VoiceClone Studio is free and open-source (GPL-3.0). Models: OmniVoice (Apache-2.0), Seed-VC (GPL-3.0), Z-Image-Turbo (Apache-2.0), SadTalker (Apache-2.0). Only clone voices you have permission to use, and label AI-generated content when publishing.</p>
+    </section>
+  </main>
+
+  <!-- floating background-job dock -->
+  <div id="dock" class="dock hidden"></div>
+  <div id="toast" class="toast hidden"></div>
+
+  <dialog id="modal"><form method="dialog"><h2 id="mTitle"></h2><div id="mBody"></div><div class="actions right"><button value="cancel" class="ghost" id="mCancel">Cancel</button><button value="ok" class="primary" id="mOk">OK</button></div></form></dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

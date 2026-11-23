@@ -1,0 +1,25 @@
+# பாட்டியின் மந்திரப் பெட்டி
+> ஒரு மழை நாள், ஒரு பழைய பெட்டி, ஒரு குடும்பத்தோட புதிய பழக்கம்.
+
+@Narrator = man
+@பாட்டி = grandma | kind elderly Tamil grandmother, silver hair in a bun, cotton saree, round glasses, gentle smile
+@கவின் = child_boy | eight year old Tamil boy, short spiky hair, striped t-shirt
+@மீரா = child_girl | seven year old Tamil girl, two braids with ribbons, yellow pavadai dress
+@அப்பா = uncle | Tamil father around forty five, thick moustache, casual shirt, warm smile
+
+[Scene: மழை நாள் | cozy Tamil home living room on a rainy evening, warm lamp light, rain on the window, two children on a sofa glued to their phones]
+Narrator: சென்னையில ஒரு மழை நாள் சாயங்காலம். வீட்டுக்குள்ள எல்லாரும் அவங்கவங்க ஃபோன்ல மூழ்கிப் போயிருந்தாங்க.
+பாட்டி (warm): கவின், மீரா! கொஞ்சம் இங்க வாங்களேன். பாட்டி கிட்ட ஒரு சீக்ரெட் இருக்கு.
+கவின் (bored): பாட்டி, ஒரு நிமிஷம். இந்த லெவல் மட்டும் முடிச்சிடறேன்.
+மீரா (curious): சீக்ரெட்டா? என்ன சீக்ரெட் பாட்டி? சொல்லுங்க சொல்லுங்க!
+
+[Scene: மந்திரப் பெட்டி | an old carved wooden box open on a straw mat, glowing old photographs and letters inside, warm candle light, cosy night]
+Narrator: பாட்டி மெதுவா ஒரு பழைய மரப்பெட்டியைத் திறந்தாங்க. உள்ள பழைய ஃபோட்டோக்களும் கடிதங்களும் இருந்துச்சு.
+பாட்டி (nostalgic): இது உங்க தாத்தா எனக்கு எழுதின முதல் கடிதம். அப்போ ஃபோன் எல்லாம் கிடையாது கண்ணு.
+கவின் (surprised): வாவ்! தாத்தா இவ்வளவு அழகா எழுதுவாரா? இது செம்மையா இருக்கு பாட்டி!
+மீரா (excited): இந்த ஃபோட்டோல இருக்கிறது யாரு? நீங்களா பாட்டி? செம்ம க்யூட்டா இருக்கீங்க!
+
+[Scene: புதிய பழக்கம் | a Tamil family sitting together on the floor of their living room laughing, the rain has stopped, evening sky glowing through the window, warm happy mood]
+அப்பா (laughing): என்ன இங்க ஒரே சிரிப்பு சத்தம்? நானும் சேர்ந்துக்கலாமா?
+பாட்டி (warm): வாப்பா, உட்காரு. ஃபோன் எல்லாம் கொஞ்சம் ஓரமா வச்சிட்டு, நம்ம கதை பேசலாம்.
+Narrator: அன்னைக்கு ராத்திரி யாருமே ஃபோனைத் தொடல. ஏன்னா, உண்மையான மந்திரம் நம்ம குடும்பத்தோட நேரம் தான்.

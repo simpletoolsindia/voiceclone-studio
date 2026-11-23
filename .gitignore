@@ -1,0 +1,15 @@
+# Python envs and fetched third-party code (installed by engine/scripts/setup_engine.ps1)
+engine/.venv/
+engine/.venv-talk/
+engine/third_party/
+engine/checkpoints/
+__pycache__/
+*.pyc
+# Rust / Node
+app/src-tauri/target/
+app/src-tauri/gen/
+app/node_modules/
+# local work and outputs
+work/
+output/
+*.vcpt
