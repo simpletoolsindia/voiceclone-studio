@@ -312,7 +312,7 @@ Style: Btn,Segoe UI,{bs},&H00FFFFFF,&H000000FF,&H001A1AE0,&H00000000,-1,0,0,0,10
             let qy = if vertical { cy - 260 } else { cy - 190 };
             s += &format!("Dialogue: 0,0:00:00.20,{end},Title,,0,0,0,,{{\\pos({cx},{qy})\\fad(400,300)\\fs{}}}{}\n",
                 if vertical { 66 } else { 70 }, ass_escape(question));
-            s += &format!("Dialogue: 0,0:00:00.60,{end},Small,,0,0,0,,{{\\pos({cx},{})\\fad(400,300)}}கமெண்ட்ல சொல்லுங்க!\n", qy + 90);
+            s += &format!("Dialogue: 0,0:00:00.60,{end},Small,,0,0,0,,{{\\pos({cx},{})\\fad(400,300)}}அடுத்த கதையில சந்திப்போம்!\n", qy + 90);
             // pulsing red SUBSCRIBE button
             let by = if vertical { cy + 120 } else { cy + 110 };
             let mut pulse = String::new();
@@ -542,7 +542,9 @@ fade=t=out:st=2.2:d=0.4:alpha=1[emo];[{last}][emo]overlay=x='{ex}+({es}-overlay_
         Some(a) => inp.file(&[], a),
         None => inp.lavfi("anullsrc=r=48000:cl=stereo"),
     };
-    let mut mix = vec![format!("[{vi}:a]aresample=48000,aformat=channel_layouts=stereo,apad[a0]")];
+    // voice clarity: the TTS output is a little dull above 4 kHz - cut rumble, lift presence and air
+    let eq = if seg.audio.is_some() { ",highpass=f=75,equalizer=f=3400:t=q:w=1.1:g=3,highshelf=f=7000:g=3.5,alimiter=limit=0.95" } else { "" };
+    let mut mix = vec![format!("[{vi}:a]aresample=48000:resampler=soxr{eq},aformat=channel_layouts=stereo,apad[a0]")];
     let mut labels = vec!["[a0]".to_string()];
     if let Some(amb) = &seg.ambience {
         let ai = inp.file(&["-stream_loop", "-1"], amb);
@@ -620,7 +622,7 @@ fn hook_line(p: &Project) -> Option<(usize, usize)> {
 }
 
 /// Build the shot plan for a project whose assets are ready.
-pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Option<PathBuf>) -> Vec<Segment> {
+pub fn plan(p: &Project, pause: f64, sfx: &Sfx, _emoji_png: &dyn Fn(&str) -> Option<PathBuf>) -> Vec<Segment> {
     let on_screen: Vec<&crate::story::Character> =
         p.characters.iter().filter(|c| !c.is_narrator && c.face_image.is_some()).collect();
     let actor = |cid: &str, video: Option<String>| -> Option<Actor> {
@@ -671,7 +673,7 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
         let clip = cine.clone().or_else(|| sc.clip.clone().map(PathBuf::from).filter(|c| c.exists()));
         Some(Segment {
             shot, background: bg, clip,
-            emoji: if speaker.is_some() { emoji_for(&l.emotion, &l.text).and_then(|e| emoji_png(e)) } else { None },
+            emoji: None, // no emoji stickers: they distract from the story
             speaker, listener, audio: Some(PathBuf::from(audio)), duration: l.duration.max(0.6) + pause,
             text: l.text.clone(), ambience: ambience_for(&sc.visual, &sc.title, sfx), motion,
             scene_id: Some(sc.id.clone()), line_id: Some(l.id.clone()),
@@ -726,6 +728,9 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
         for li in 0..n {
             let line = &sc.lines[li];
             if line.kind == "question" {
+                // viewer questions interrupt the story - not shown any more
+                continue;
+                #[allow(unreachable_code)]
                 segs.push(Segment {
                     kind: SegKind::Question { text: line.text.clone() }, background: bg.clone(), duration: 4.2,
                     fade_in: true, ambience: amb.clone(),
@@ -775,8 +780,8 @@ pub fn plan(p: &Project, pause: f64, sfx: &Sfx, emoji_png: &dyn Fn(&str) -> Opti
     }
     let last_bg = p.scenes.iter().rev().find_map(|s| s.image.clone()).map(PathBuf::from);
     segs.push(Segment {
-        kind: SegKind::EndCard { question: "இந்தக் கதையில உங்களுக்கு பிடிச்ச கேரக்டர் யாரு?".into() },
-        background: last_bg, duration: 6.0, fade_in: true, fade_out: true,
+        kind: SegKind::EndCard { question: "கதை பிடிச்சிருந்தா லைக் பண்ணுங்க!".into() },
+        background: last_bg, duration: 4.0, fade_in: true, fade_out: true,
         sfx: vec![(sfx.whoosh.clone(), 0.0, 0.5), (sfx.pop.clone(), 1.0, 0.45)],
         chapter: Some("முடிவு".into()), label: "End card".into(), ..blank.clone()
     });

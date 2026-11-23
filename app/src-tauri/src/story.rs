@@ -60,10 +60,6 @@ pub struct Line {
     /// Lip-sync strength boost requested by the user (stronger guidance, more steps)
     #[serde(default)]
     pub sync_boost: bool,
-    /// Where the speaker stands in the cinematic shot [x, y, w, h] (fractions of the frame);
-    /// lets the cartoon mouth fallback find the speaker, not the listener
-    #[serde(default)]
-    pub speaker_box: Option<Vec<f64>>,
     /// Optional speaking speed for this line (e.g. 0.85 slower, 1.15 faster)
     #[serde(default)]
     pub speed: Option<f64>,
@@ -421,13 +417,13 @@ SCREENPLAY CRAFT - this matters more than anything:
 - Every main character WANTS something; give the story a clear conflict, rising stakes, a twist or surprise, an emotional climax and a payoff that is set up earlier.
 - SHOW, DON'T TELL: let characters act and react. The narrator only bridges time or sets a mood - at most 1 narrator line per scene, under 20% of all lines.
 - Each scene has a purpose and ends with a turn (something changes). 4 to 6 scenes. Short, punchy exchanges between characters; let them interrupt, joke and react.
-- Include ONE interactive moment for viewers (a riddle, a choice or a "what happens next?") as a line with kind "question": a short Tamil question shown on screen while the video pauses.
+- Never ask the viewers questions (no riddles, no "what happens next?"): just tell the story. Do not use kind "question".
 - Use 2 to 4 lines with kind "insert": silent cut-away close-ups that make the story visual (an object, a hand, a reaction, a dramatic moment). For inserts, "text" is an English image description and "speaker" is empty. Inserts must show objects, hands or places only - never people's faces or the whole family (characters only appear in dialogue shots).
 - End on a warm, satisfying moment and a gentle lesson shown through action, never a lecture. Family-friendly; no insults or violence.
 
 FIELDS:
 - dialogue lines: "speaker" = character name, "emotion" = one English word (happy, excited, surprised, sad, angry, curious, scared, warm, playful, thinking, nostalgic...), "action" = what the speaker physically does while talking, in English, visual and specific ("reaches for the tablet", "points at the photo", "claps her hands"). Actions involve only the speaker and objects - never touching or bringing in other people (each shot shows at most the speaker and one listener).
-- Animals, birds, toys and magical beings (a rabbit, a parrot, the moon...) are characters too: give small/young ones child_boy or child_girl, wise or old ones grandpa or grandma, and vary them so no two characters share a voice. Never create a character for the narrator's moral, the title or a sound effect.
+- Animals, birds, toys and magical beings (a rabbit, a parrot, the moon...) are characters too: ALWAYS give cute animals kid voices: child_boy or child_girl for the main/little ones, boy or girl for an older friend, grandpa or grandma only for wise old ones, never man, uncle or aunty, and vary them so no two characters share a voice. Never create a character for the narrator's moral, the title or a sound effect.
 - For each character choose the voice preset matching age and gender: man, girl, boy, aunty, uncle, grandpa, grandma, child_boy, child_girl. Include the Narrator in "characters" (man for a dramatic storyteller, grandma for a cosy one) with a preset no other character uses.
 - "look" (English): concise visual description for an image generator - age, face, hair, clothing, one distinctive feature.
 - "visual" (English): one vivid sentence describing the scene's location, time of day, light and mood with Tamil Nadu details. Describe the place; no text in images.

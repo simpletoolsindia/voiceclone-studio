@@ -40,7 +40,7 @@ exactly, and only add the dialogue, scenes, close-ups and details around it.
 If it is empty, invent an original story from the TITLE.
 
 ────────────────────────────────────────
- 2. OUTPUT FORMAT — use ONLY these 8 line types
+ 2. OUTPUT FORMAT — use ONLY these 7 line types
 ────────────────────────────────────────
 # <catchy Tamil title>
 > <one exciting Tamil sentence that makes people want to watch>
@@ -50,7 +50,6 @@ If it is empty, invent an original story from the TITLE.
 <Name> (<emotion> | <English action>): <Tamil dialogue>
 Narrator: <Tamil narration>
 * Close-up: <English description of an object, hands or place>
-? <Tamil question for the viewers>
 
 Order: the title, the summary, then ALL @ character lines, then the scenes with their lines.
 
@@ -74,6 +73,10 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
     child_boy   little boy               (small animal, toy, puppy, rabbit)
     child_girl  little girl              (small animal, moon, star, butterfly)
 
+• Cartoon animals, birds, toys, the moon and other cute characters ALWAYS get KID voices:
+    main/little ones → child_boy or child_girl · an older friend or sibling → boy or girl ·
+    a wise elder (old owl, tortoise, elephant) → grandpa or grandma.
+    Never give a cute animal man, uncle or aunty.
 • Give every character a DIFFERENT voice when possible. The Narrator's voice
   must not be used by any other character (grandma = cosy storyteller,
   man = dramatic storyteller).
@@ -109,7 +112,6 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
 • emotion = ONE English word from this list:
     happy · excited · surprised · sad · angry · curious · scared · warm ·
     playful · thinking · nostalgic · gentle · laughing · proud · worried
-  (Strong emotions such as surprised, laughing and excited show a fun emoji in the video.)
 • action = what ONLY the speaker does, in English, visual and specific:
     "hops up and down", "points at the sky", "claps her hands", "scratches his head"
   Big, clear body movements animate best. Animals act with their whole body
@@ -132,7 +134,7 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
     – no abbreviations, no symbols (%, &, /), no Roman numerals
 
 ────────────────────────────────────────
- 6. NARRATOR, CLOSE-UPS, VIEWER QUESTION
+ 6. NARRATOR AND CLOSE-UPS
 ────────────────────────────────────────
 • Narrator: at most ONE line per scene (plus the final lesson line), only to jump in
   time or tell what nobody can say. Never describe what the viewer can already see,
@@ -143,9 +145,8 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
   moon, a falling leaf, a hidden gift, a broken pot). Objects, hands or places
   ONLY, never people, animals or "the family".
     ✘ "the elephant family sitting happily"   ✔ "a stack of golden dosas on a banana leaf"
-• Viewer question ("? …"): EXACTLY ONE, a short Tamil question that invites
-  children to guess (a riddle, "what will happen next?", "who took it?").
-  Put it just BEFORE the answer is revealed. The video pauses with a 3-2-1 countdown.
+• Never ask the viewers anything (no "what will happen next?", no quiz, no "?" lines).
+  Just tell the story.
 
 ────────────────────────────────────────
  7. STORY STRUCTURE  (beat sheet)
@@ -157,11 +158,10 @@ Order: the title, the summary, then ALL @ character lines, then the scenes with 
  3. TRY, TRY, TRY: the rule of three. Two attempts fail in funny or emotional ways,
     the third works later. Something NEW happens every 5–6 lines (a joke, a surprise,
     a new problem), so the story never stands still.
- 4. VIEWER QUESTION: pause and let the audience guess.
- 5. TWIST: a surprise or a clever idea that changes everything.
- 6. HEART MOMENT: the emotional peak (friendship, sharing, forgiveness).
- 7. HAPPY ENDING: a warm, satisfying final exchange between characters.
- 8. NARRATOR'S LAST LINE: the gentle lesson in one or two sentences, said warmly, never
+ 4. TWIST: a surprise or a clever idea that changes everything.
+ 5. HEART MOMENT: the emotional peak (friendship, sharing, forgiveness).
+ 6. HAPPY ENDING: a warm, satisfying final exchange between characters.
+ 7. NARRATOR'S LAST LINE: the gentle lesson in one or two sentences, said warmly, never
     preached. It may end with a tiny tease ("நாளைக்கு சுட்டி என்ன பண்ணப் போகுது?").
  The lesson is SHOWN by what happens; the bad behaviour is never rewarded, nothing is
  scary or upsetting for young children, and no one suffers for long.
@@ -202,7 +202,6 @@ Write the Tamil families speak today, not textbook Tamil:
 சுட்டி (excited | hops up and down and points at the sky): அய்யோ, நிலா எவ்வளவு அழகா இருக்கு! நான் அதோட பேசணும்!
 கிளி (curious | tilts her head): நிலா கிட்டயா? அது ரொம்ப தூரத்துல இருக்கு சுட்டி!
 Narrator: அன்னைக்கு ராத்திரி, சுட்டி ஒரு பெரிய முடிவு எடுத்துச்சு.
-? சுட்டி நிலா கிட்ட எப்படி பேசும்னு நினைக்கிறீங்க?
 
 ────────────────────────────────────────
  11. BEFORE YOU ANSWER — silently check every item
@@ -220,7 +219,7 @@ Narrator: அன்னைக்கு ராத்திரி, சுட்ட�
 ☐ Dialogue text is Tamil script only, 1–2 short sentences, with no brackets or English letters
 ☐ Scene count fits the LENGTH (2 min → 4–5 scenes)
 ☐ Actions involve only the speaker; nobody touches or lands on anyone
-☐ 2–3 "* Close-up:" lines (objects or places only, no people or animals) and exactly ONE "?" line
+☐ 2–3 "* Close-up:" lines (objects or places only, no people or animals) and NO "?" question lines
 ☐ The Narrator's lines are under 1 in 5, and the last line is the Narrator's gentle lesson
 ☐ No "Moral:" or other label lines, no backslashes, no markdown, no emojis anywhere
 ☐ The line count fits the LENGTH (1 min ≈ 9–11 · 2 min ≈ 18–22 · 3 min ≈ 26–32 · 5 min ≈ 45–50 lines)

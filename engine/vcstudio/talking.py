@@ -88,17 +88,6 @@ def animate_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
         raise
     finally:
         _queue.unregister_child(proc)
-    # portraits with no human face (cartoon animals, moon, objects): audio-driven cartoon jaw
-    todo = [k for k, r in enumerate(results) if r is None]
-    if todo:
-        from . import cartoon_talk
-        for n, k in enumerate(todo):
-            p(0.99, f"Cartoon mouth {n + 1} of {len(todo)}")
-            try:
-                results[k] = cartoon_talk.animate_portrait(jobs[k]["image"], jobs[k]["audio"], jobs[k]["out"])
-            except Exception as e:
-                errors.append(f"cartoon {k}: {e}")
-        cartoon_talk.gpu.reserve()
     if all(r is None for r in results):
         raise RuntimeError("Talking-face animation failed: " + ("; ".join(errors[:2]) or "unknown error"))
     return results

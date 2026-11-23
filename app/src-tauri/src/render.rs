@@ -673,19 +673,7 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
         }
     }
     let assets_dir = crate::paths::data_dir().join("assets");
-    let mut emoji_map: HashMap<String, PathBuf> = HashMap::new();
-    for sc in &p.scenes {
-        for l in &sc.lines {
-            if let Some(e) = video::emoji_for(&l.emotion, &l.text) {
-                if emoji_map.contains_key(e) { continue; }
-                let hex: String = e.chars().map(|c| format!("{:x}", c as u32)).collect::<Vec<_>>().join("-");
-                let out = assets_dir.join("emoji").join(format!("{hex}.png"));
-                if out.exists() || engine.request("POST", "/emoji", Some(json!({"char": e, "out": out}))).await.is_ok() {
-                    emoji_map.insert(e.to_string(), out);
-                }
-            }
-        }
-    }
+    let emoji_map: HashMap<String, PathBuf> = HashMap::new(); // emoji stickers are off
     let sfx = video::make_sfx(&assets_dir.join("sfx"))?;
 
     // 8. compose ----------------------------------------------------------------
@@ -903,8 +891,6 @@ async fn cinematic(engine: &Engine, renders: &Renders, id: &str, p: &mut Project
                     "x": (x as f64 * k) as i64, "y": (y as f64 * k) as i64, "size": (sz as f64 * k) as i64, "dim": true}));
             }
             let (x, y, sz) = video::actor_box(&layout, shot, right, false);
-            p.scenes[si].lines[li].speaker_box = Some(vec![x as f64 / layout.w as f64, y as f64 / layout.h as f64,
-                sz as f64 / layout.w as f64, sz as f64 / layout.h as f64]);
             let face = PathBuf::from(c.face_image.as_ref().unwrap());
             actors.push(json!({"image": face, "mask": face.with_file_name(format!("{}_mask.png", c.id)),
                 "x": (x as f64 * k) as i64, "y": (y as f64 * k) as i64, "size": (sz as f64 * k) as i64}));
@@ -982,7 +968,7 @@ async fn cinematic(engine: &Engine, renders: &Renders, id: &str, p: &mut Project
                 continue;
             }
             jobs.push(json!({"video": clip, "audio": audio, "out": out, "steps": steps, "guidance": guidance,
-                "image": dir.join("keyframes").join(format!("{}.png", l.id)), "box": l.speaker_box}));
+                "image": dir.join("keyframes").join(format!("{}.png", l.id))}));
             idx.push((si, li));
             keys.push(key);
         }

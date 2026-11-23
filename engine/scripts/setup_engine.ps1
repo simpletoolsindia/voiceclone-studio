@@ -110,8 +110,7 @@ if ($Cinematic) {
   uv pip install --python $Ps -r "$env:TEMP\vcs_sync_reqs.txt"
   if ($LASTEXITCODE -ne 0) { throw "lip-sync packages failed" }
   & $Py -c "from huggingface_hub import hf_hub_download as d; [d('ByteDance/LatentSync-1.5', f, local_dir=r'third_party\LatentSync\checkpoints') for f in ('latentsync_unet.pt','whisper/tiny.pt')]"
-  Step "Fetching the cartoon mouth detector (talking animals and objects)"
-  & $Py -c "from huggingface_hub import snapshot_download as s; s('google/owlv2-base-patch16-ensemble'); s('google-t5/t5-base', allow_patterns=['*.json','*.model'])"
+  & $Py -c "from huggingface_hub import snapshot_download as s; s('google-t5/t5-base', allow_patterns=['*.json','*.model'])"
 }
 
 Step "Checking GPU"

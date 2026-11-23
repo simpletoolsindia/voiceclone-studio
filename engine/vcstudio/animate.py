@@ -247,15 +247,7 @@ def lipsync_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
         raise
     finally:
         _queue.unregister_child(proc)
-    return _cartoon_fallback(jobs, results, p)
-
-
-def _cartoon_fallback(jobs, results, p):
-    """Shots LatentSync could not lip-sync (no human face: animals, moon, toys) get the
-    audio-driven cartoon jaw instead of a closed mouth."""
-    todo = [k for k, r in enumerate(results) if r is None]
-    if not todo:
-        return results
+    return results
     from . import cartoon_talk
     for n, k in enumerate(todo):
         j = jobs[k]
