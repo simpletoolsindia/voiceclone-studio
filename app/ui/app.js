@@ -131,10 +131,11 @@ async function refreshJobs() {
   badge.classList.toggle("hidden", running.length === 0);
   const jobHtml = (j, compact) => {
     const pct = j.status === "done" ? 100 : (j.percent ?? Math.round((j.progress || 0) * 100));
-    const eta = j.eta_sec != null ? `~${fmtTime(j.eta_sec)} left` : j.status === "running" ? "estimating…" : "";
+    const eta = j.paused ? "⏸ paused" : j.eta_sec != null ? `~${fmtTime(j.eta_sec)} left` : j.status === "running" ? "estimating…" : "";
     const right = j.status === "running" || j.status === "queued"
-      ? `<button class="ghost small" data-cancel="${j.id}">Cancel</button>` : `<span class="st">${j.status}</span>`;
-    return `<div class="job ${j.status}">
+      ? (j.status === "running" ? `<button class="ghost small" data-${j.paused ? "resume" : "pause"}="${j.id}">${j.paused ? "▶ Resume" : "⏸ Pause"}</button>` : "") +
+        `<button class="ghost small" data-cancel="${j.id}">Cancel</button>` : `<span class="st">${j.status}</span>`;
+    return `<div class="job ${j.status}${j.paused ? " paused" : ""}">
       <div class="job-top"><span class="job-title">${esc(j.title)}</span><span class="job-pct">${pct.toFixed ? pct.toFixed(pct < 10 ? 1 : 0) : pct}%</span></div>
       <div class="progress"><div style="width:${pct}%"></div></div>
       ${j.steps && j.steps.length ? `<div class="job-step">Step ${j.steps.filter((x) => x.status === "done").length + 1} of ${j.steps.filter((x) => x.status !== "skipped").length}: ${esc((j.steps.find((x) => x.status === "running") || {}).label || "")}</div>` : ""}
@@ -160,6 +161,10 @@ async function refreshJobs() {
 document.addEventListener("click", async (ev) => {
   const c = ev.target.closest("[data-cancel]");
   if (c) { await invoke("job_cancel", { id: c.dataset.cancel }).catch((e) => toast(e, true)); refreshJobs(); }
+  const pz = ev.target.closest("[data-pause]");
+  if (pz) { await invoke("job_pause", { id: pz.dataset.pause }).catch((e) => toast(e, true)); toast("⏸ Paused"); refreshJobs(); }
+  const rs = ev.target.closest("[data-resume]");
+  if (rs) { await invoke("job_resume", { id: rs.dataset.resume }).catch((e) => toast(e, true)); toast("▶ Resumed"); refreshJobs(); }
   const o = ev.target.closest("[data-open]");
   if (o) T.opener.revealItemInDir(o.dataset.open).catch(() => {});
 });
@@ -665,6 +670,15 @@ $("#edRender").addEventListener("click", async () => {
   } catch (e) { toast(String(e), true, 6000); }
 });
 $("#rCancel").addEventListener("click", () => curRenderJob && invoke("job_cancel", { id: curRenderJob }));
+$("#rPause").addEventListener("click", async () => {
+  if (!curRenderJob) return;
+  const j = lastJobs.find((x) => x.id === curRenderJob);
+  try {
+    await invoke(j && j.paused ? "job_resume" : "job_pause", { id: curRenderJob });
+    toast(j && j.paused ? "▶ Resumed" : "⏸ Paused — the GPU is free until you resume");
+    refreshJobs();
+  } catch (e) { toast(String(e), true); }
+});
 let lastGpu = null, gpuTimer = 0;
 async function pollGpu() {
   if (Date.now() - gpuTimer < 3000) return;
@@ -696,7 +710,10 @@ async function updateRenderPanel() {
   $("#rPct").textContent = pct.toFixed(pct < 10 ? 1 : 0) + "%";
   $("#rArc").style.strokeDashoffset = String(326.7 * (1 - pct / 100));
   $("#rBar").style.width = pct + "%";
-  $("#rStage").textContent = j.stage || "Working…";
+  $("#renderPanel").classList.toggle("paused", !!j.paused);
+  $("#rPause").textContent = j.paused ? "▶ Resume" : "⏸ Pause";
+  $("#rPause").classList.toggle("primary", !!j.paused);
+  $("#rStage").textContent = j.paused ? "⏸ Paused — click Resume to continue (nothing is lost)" : (j.stage || "Working…");
   const finishAt = j.eta_sec != null ? new Date(Date.now() + j.eta_sec * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
   const stats = [
     `<span>Elapsed <b>${fmtTime(j.elapsed_sec)}</b></span>`,
@@ -724,7 +741,7 @@ async function updateRenderPanel() {
   const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 10;
   log.innerHTML = (j.events || []).map((e) => `<div>${esc(e)}</div>`).join("");
   if (atBottom) log.scrollTop = log.scrollHeight;
-  setTaskbar(pct, "normal");
+  setTaskbar(pct, j.paused ? "paused" : "normal");
   if (j.status !== "running") {
     const done = j.status === "done";
     curRenderJob = null;

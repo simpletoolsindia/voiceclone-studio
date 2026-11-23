@@ -98,6 +98,23 @@ def cancel(jid: str):
     return {"ok": queue.cancel(jid)}
 
 
+@app.post("/jobs/pause", dependencies=[Depends(auth)])
+def jobs_pause():
+    queue.pause()
+    return {"paused": True}
+
+
+@app.post("/jobs/resume", dependencies=[Depends(auth)])
+def jobs_resume():
+    queue.resume()
+    return {"paused": False}
+
+
+@app.get("/jobs/paused", dependencies=[Depends(auth)])
+def jobs_paused():
+    return {"paused": queue.paused.is_set()}
+
+
 @app.post("/jobs/clear", dependencies=[Depends(auth)])
 def clear():
     queue.clear_finished()

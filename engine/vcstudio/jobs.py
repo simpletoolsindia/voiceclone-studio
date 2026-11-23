@@ -40,6 +40,7 @@ class Job:
         d = asdict(self)
         d.pop("cancel_requested")
         d["percent"] = round(self.progress * 100, 1)
+        d["paused"] = self.status == "running" and queue.paused.is_set()
         d["eta_sec"] = self.eta()
         d["elapsed_sec"] = round((self.finished or time.time()) - self.started, 1) if self.started else 0
         return d
@@ -57,7 +58,42 @@ class JobQueue:
         self._cv = threading.Condition()
         self._pending: list[tuple[Job, Callable]] = []
         self.max_history = max_history
+        # Pause: GPU work stops at the next progress point (models stay loaded),
+        # helper subprocesses (lip-sync, talking faces) are suspended by the OS.
+        self.paused = threading.Event()
+        self.children: set = set()
         threading.Thread(target=self._worker, daemon=True, name="gpu-worker").start()
+
+    def pause(self) -> None:
+        self.paused.set()
+        for proc in list(self.children):
+            try:
+                import psutil
+                psutil.Process(proc.pid).suspend()
+            except Exception:
+                pass
+
+    def resume(self) -> None:
+        for proc in list(self.children):
+            try:
+                import psutil
+                psutil.Process(proc.pid).resume()
+            except Exception:
+                pass
+        self.paused.clear()
+
+    def register_child(self, proc) -> None:
+        """Track a helper subprocess so pause/cancel reach it."""
+        self.children.add(proc)
+        if self.paused.is_set():
+            try:
+                import psutil
+                psutil.Process(proc.pid).suspend()
+            except Exception:
+                pass
+
+    def unregister_child(self, proc) -> None:
+        self.children.discard(proc)
 
     def submit(self, kind: str, title: str, fn: Callable[[Callable[[float, str], None]], Any]) -> Job:
         job = Job(id=uuid.uuid4().hex[:10], kind=kind, title=title)
@@ -73,6 +109,8 @@ class JobQueue:
         return job
 
     def cancel(self, jid: str) -> bool:
+        if self.paused.is_set():
+            self.resume()          # a suspended helper must run to notice the cancel
         with self._cv:
             job = self.jobs.get(jid)
             if not job or job.status not in ("queued", "running"):
@@ -103,6 +141,10 @@ class JobQueue:
             job.status, job.started, job.stage = "running", time.time(), "Starting"
 
             def progress(frac: float, stage: str = "", preview: Optional[str] = None, _job=job):
+                if _job.cancel_requested:
+                    raise Cancelled()
+                while self.paused.is_set() and not _job.cancel_requested:
+                    time.sleep(0.25)
                 if _job.cancel_requested:
                     raise Cancelled()
                 _job.progress = max(_job.progress, min(1.0, float(frac)))

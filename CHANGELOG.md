@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 — 2026-11-23
+
+- **Pause / Resume** for renders and engine jobs, in the progress panel, the jobs box and the Jobs page. GPU work stops at a safe point, helper processes are suspended, and time-left skips paused time.
+- **Fix after rendering**, **smart cache**, **downloads** (srt, mp3, Shorts teaser), **channel intro/outro** and **version history** (see 0.1.0 notes).
+- Fixed: the app crashed when clicking Render video or Live Start.
+
 ## 0.1.0 — 2026-11-23
 
 First public release.

@@ -79,6 +79,8 @@ Click **🎬 Render video**. The progress panel shows the following:
 
 You can switch pages or close the window, and rendering keeps going in the system tray. The taskbar icon shows progress.
 
+**⏸ Pause / ▶ Resume** works at any time: in the progress panel, the background-jobs box or the Jobs page. GPU work stops at its next safe point and the lip-sync and talking-face helpers are frozen, so the GPU is free for games or other apps. Resuming continues exactly where it stopped, and the clock and time-left estimate skip the paused time. If you close the app or the PC shuts down mid-render, click **🎬 Render video** again: finished parts are cached, so it continues from where it stopped.
+
 ### 6. Download
 
 When the video is done:

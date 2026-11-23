@@ -149,6 +149,28 @@ async fn job_cancel(s: State<'_, AppState>, id: String) -> Res<bool> {
     Ok(v["ok"].as_bool().unwrap_or(false))
 }
 
+/// Pause / resume a job. GPU work in the engine stops at its next safe point
+/// (models stay loaded) and helper processes are suspended, so resuming is instant.
+#[tauri::command]
+async fn job_pause(s: State<'_, AppState>, id: String) -> Res<()> {
+    if s.renders.is_render(&id) {
+        s.renders.pause(&id);
+    }
+    s.engine.request("POST", "/jobs/pause", None).await.map_err(e)?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn job_resume(s: State<'_, AppState>, id: String) -> Res<()> {
+    if s.renders.is_render(&id) {
+        s.renders.resume(&id);
+    }
+    if !s.renders.any_paused() {
+        s.engine.request("POST", "/jobs/resume", None).await.map_err(e)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 async fn jobs_clear(s: State<'_, AppState>) -> Res<()> {
     s.renders.clear_finished();
@@ -504,7 +526,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             engine_status, engine_start, engine_restart, engine_log, engine_request, engine_setup,
-            jobs_all, job_cancel, jobs_clear,
+            jobs_all, job_cancel, jobs_clear, job_pause, job_resume,
             live_devices, live_start, live_stop, live_state,
             story_list, story_get, story_new, story_save, story_delete, story_script, story_from_script,
             story_write, story_render, ollama_models,

@@ -65,6 +65,8 @@ def animate_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
     proc = subprocess.Popen([str(talk_python()), str(RUNNER), str(spec)], cwd=str(SADTALKER),
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
                             errors="replace", creationflags=flags)
+    from .jobs import queue as _queue
+    _queue.register_child(proc)
     try:
         for line in proc.stdout:
             parts = line.strip().split(" ", 3)
@@ -77,8 +79,15 @@ def animate_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
                 errors.append(line.strip())
         proc.wait()
     except BaseException:
+        try:
+            import psutil
+            psutil.Process(proc.pid).resume()
+        except Exception:
+            pass
         proc.kill()
         raise
+    finally:
+        _queue.unregister_child(proc)
     if all(r is None for r in results):
         raise RuntimeError("Talking-face animation failed: " + ("; ".join(errors[:2]) or "unknown error"))
     return results

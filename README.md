@@ -27,7 +27,7 @@ Free and open source · Runs locally on your NVIDIA GPU · No account, no cloud 
 | ✏️ **Fix after rendering** | Type *"at 1:22 change Appa's shirt to blue"*, *"fix the lip-sync"* or *"say it slower"*, or click a shot in the timeline. Only that part is regenerated, and every render is kept as a version. |
 | ♻ **Smart cache** | Identical voice lines, faces, scenes, animated shots, lip-syncs and composed shots are never generated twice. Recurring characters stay identical across episodes, and your channel intro/outro is prepared once. |
 | 📦 **Downloads** | MP4, thumbnail, Tamil subtitles (.srt), audio (.mp3) and a one-click 9:16 Shorts teaser. |
-| ⏳ **Background jobs** | A detailed progress panel shows every step, live preview, time left and GPU use. Work continues in the system tray and the taskbar icon shows progress. |
+| ⏳ **Background jobs** | A detailed progress panel shows every step, live preview, time left and GPU use. Work continues in the system tray and the taskbar icon shows progress. **⏸ Pause / ▶ Resume** at any time. |
 
 <p align="center">
   <img src="docs/images/home.jpg" width="49%" alt="Story Studio home" />

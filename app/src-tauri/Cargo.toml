@@ -1,6 +1,6 @@
 [package]
 name = "voiceclone-studio"
-version = "0.1.0"
+version = "0.1.1"
 description = "Open-source voice cloning, Tamil text-to-speech, live voice conversion and story video studio"
 authors = ["VoiceClone Studio contributors"]
 license = "GPL-3.0-or-later"

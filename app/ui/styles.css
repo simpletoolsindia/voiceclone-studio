@@ -303,3 +303,10 @@ button.wide { width: 100%; margin: 10px 0 8px; }
 .version .v { font-weight: 800; color: var(--accent); }
 .version .n { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1000px) { .res-bottom { grid-template-columns: 1fr; } }
+
+.rp-buttons { display: flex; flex-direction: column; gap: 6px; }
+.render-panel.paused .rp-arc { stroke: var(--muted); filter: none; }
+.render-panel.paused .progress > div { background: var(--muted); }
+.render-panel.paused .progress > div::after, .render-panel.paused .rp-step.running .rp-icon { animation: none; }
+.render-panel.paused .rp-live { background: rgba(120,120,140,.85); animation: none; }
+.job.paused .job-pct { color: var(--warn); }

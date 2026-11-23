@@ -51,6 +51,8 @@ pub struct RenderJob {
     pub events: Vec<String>,
     /// what the job contains, e.g. [("Lines", "22"), ("Shots", "28")]
     pub facts: Vec<(String, String)>,
+    pub paused: bool,
+    pub paused_since: Option<f64>,
 }
 
 #[derive(Default)]
@@ -121,8 +123,10 @@ impl Renders {
         let mut v: Vec<RenderJob> = self.jobs.lock().unwrap().values().map(|(j, _)| {
             let mut j = j.clone();
             if j.status == "running" {
-                j.elapsed_sec = now - j.started;
-                j.eta_sec = j.eta(now);
+                // while paused the clock stands still
+                let t = j.paused_since.unwrap_or(now);
+                j.elapsed_sec = t - j.started;
+                j.eta_sec = j.eta(t);
             }
             j
         }).collect();
@@ -132,6 +136,48 @@ impl Renders {
 
     pub fn cancel(&self, id: &str) -> bool {
         self.jobs.lock().unwrap().get(id).map(|(_, c)| c.store(true, Ordering::Relaxed)).is_some()
+    }
+
+    pub fn is_render(&self, id: &str) -> bool {
+        self.jobs.lock().unwrap().contains_key(id)
+    }
+
+    pub fn pause(&self, id: &str) {
+        let now = now_f();
+        self.with(id, |j| {
+            if j.status == "running" && !j.paused {
+                j.paused = true;
+                j.paused_since = Some(now);
+                j.events.push("⏸ Paused".into());
+            }
+        });
+    }
+
+    /// Resume: shift the clocks by the paused time so elapsed / ETA stay honest.
+    pub fn resume(&self, id: &str) {
+        let now = now_f();
+        self.with(id, |j| {
+            if let (true, Some(t)) = (j.paused, j.paused_since) {
+                let d = now - t;
+                j.started += d;
+                for st in j.steps.iter_mut().filter(|s| s.status == "running") {
+                    if let Some(a) = st.started.as_mut() {
+                        *a += d;
+                    }
+                }
+                j.paused = false;
+                j.paused_since = None;
+                j.events.push(format!("▶ Resumed after {}", fmt_secs(d)));
+            }
+        });
+    }
+
+    pub fn is_paused(&self, id: &str) -> bool {
+        self.jobs.lock().unwrap().get(id).map(|(j, _)| j.paused).unwrap_or(false)
+    }
+
+    pub fn any_paused(&self) -> bool {
+        self.jobs.lock().unwrap().values().any(|(j, _)| j.paused && j.status == "running")
     }
 
     pub fn clear_finished(&self) {
@@ -145,7 +191,7 @@ impl Renders {
             id: id.clone(), kind: "story".into(), title: title.into(), project_id: project_id.into(),
             status: "running".into(), progress: 0.0, percent: 0.0, stage: "Preparing".into(), started: now_f(),
             eta_sec: None, elapsed_sec: 0.0, result: None, error: None, steps: vec![], preview: None,
-            events: vec![], facts: vec![],
+            events: vec![], facts: vec![], paused: false, paused_since: None,
         };
         self.jobs.lock().unwrap().insert(id.clone(), (job, flag.clone()));
         (id, flag)
@@ -635,6 +681,9 @@ async fn run(engine: &Engine, renders: &Renders, id: &str, flag: &AtomicBool, mu
     let mut handles = vec![];
     let segments = Arc::new(segments);
     for i in 0..n {
+        while renders.is_paused(id) && !cancelled() {
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        }
         check()?;
         let permit = sem.clone().acquire_owned().await?;
         if outs[i].exists() {

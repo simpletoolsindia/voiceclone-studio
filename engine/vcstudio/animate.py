@@ -218,6 +218,8 @@ def lipsync_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
     proc = subprocess.Popen([str(sync_python()), str(ENGINE / "scripts" / "sync_runner.py"), str(spec)],
                             cwd=str(LATENTSYNC), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
                             encoding="utf-8", errors="replace", creationflags=flags, env=env)
+    from .jobs import queue as _queue
+    _queue.register_child(proc)
     try:
         for line in proc.stdout:
             parts = line.strip().split(" ", 3)
@@ -230,6 +232,13 @@ def lipsync_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
                     p(0.02 + 0.97 * (k + 1) / max(1, len(jobs)), "", jobs[k]["image"])
         proc.wait()
     except BaseException:
+        try:
+            import psutil
+            psutil.Process(proc.pid).resume()
+        except Exception:
+            pass
         proc.kill()
         raise
+    finally:
+        _queue.unregister_child(proc)
     return results
