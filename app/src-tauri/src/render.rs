@@ -903,6 +903,8 @@ async fn cinematic(engine: &Engine, renders: &Renders, id: &str, p: &mut Project
                     "x": (x as f64 * k) as i64, "y": (y as f64 * k) as i64, "size": (sz as f64 * k) as i64, "dim": true}));
             }
             let (x, y, sz) = video::actor_box(&layout, shot, right, false);
+            p.scenes[si].lines[li].speaker_box = Some(vec![x as f64 / layout.w as f64, y as f64 / layout.h as f64,
+                sz as f64 / layout.w as f64, sz as f64 / layout.h as f64]);
             let face = PathBuf::from(c.face_image.as_ref().unwrap());
             actors.push(json!({"image": face, "mask": face.with_file_name(format!("{}_mask.png", c.id)),
                 "x": (x as f64 * k) as i64, "y": (y as f64 * k) as i64, "size": (sz as f64 * k) as i64}));
@@ -980,7 +982,7 @@ async fn cinematic(engine: &Engine, renders: &Renders, id: &str, p: &mut Project
                 continue;
             }
             jobs.push(json!({"video": clip, "audio": audio, "out": out, "steps": steps, "guidance": guidance,
-                "image": dir.join("keyframes").join(format!("{}.png", l.id))}));
+                "image": dir.join("keyframes").join(format!("{}.png", l.id)), "box": l.speaker_box}));
             idx.push((si, li));
             keys.push(key);
         }

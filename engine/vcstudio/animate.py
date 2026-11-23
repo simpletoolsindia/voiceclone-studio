@@ -100,7 +100,13 @@ def _encode(prompts: list[str]) -> list[tuple[torch.Tensor, torch.Tensor]]:
     if missing:
         from transformers import T5EncoderModel, T5TokenizerFast
 
-        tok = T5TokenizerFast.from_pretrained(LTX_REPO, subfolder="tokenizer")
+        try:
+            tok = T5TokenizerFast.from_pretrained(LTX_REPO, subfolder="tokenizer")
+        except Exception:
+            # LTX ships only spiece.model; converting it needs protobuf>=4, but Seed-VC's
+            # descript-audiotools pins protobuf<3.20. T5-base's tokenizer.json has the
+            # identical SentencePiece vocabulary (verified token-for-token).
+            tok = T5TokenizerFast.from_pretrained("google-t5/t5-base")
         te = T5EncoderModel.from_pretrained(LTX_REPO, subfolder="text_encoder", torch_dtype=torch.bfloat16).to("cuda")
         with torch.no_grad():
             for i in missing:
@@ -241,4 +247,22 @@ def lipsync_many(jobs: list[dict], progress: Optional[Callable[[float, str], Non
         raise
     finally:
         _queue.unregister_child(proc)
+    return _cartoon_fallback(jobs, results, p)
+
+
+def _cartoon_fallback(jobs, results, p):
+    """Shots LatentSync could not lip-sync (no human face: animals, moon, toys) get the
+    audio-driven cartoon jaw instead of a closed mouth."""
+    todo = [k for k, r in enumerate(results) if r is None]
+    if not todo:
+        return results
+    from . import cartoon_talk
+    for n, k in enumerate(todo):
+        j = jobs[k]
+        p(0.99, f"Cartoon mouth {n + 1} of {len(todo)}")
+        try:
+            results[k] = cartoon_talk.animate_clip(j["video"], j["audio"], j["out"], j.get("box"))
+        except Exception as e:  # keep the animated shot without a mouth rather than fail
+            print("cartoon mouth failed:", e, file=sys.stderr)
+    cartoon_talk.gpu.reserve()
     return results

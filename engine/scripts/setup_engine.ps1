@@ -106,10 +106,12 @@ if ($Cinematic) {
   $Ps = Join-Path $Engine ".venv-sync\Scripts\python.exe"
   uv pip install --python $Ps torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
   uv pip install --python $Ps cython "numpy==1.26.4" setuptools wheel
-  Get-Content third_party\LatentSyncequirements.txt | Where-Object { $_ -notmatch '^(gradio|--extra)' } | Set-Content -Encoding utf8 "$env:TEMPcs_sync_reqs.txt"
-  uv pip install --python $Ps -r "$env:TEMPcs_sync_reqs.txt"
+  Get-Content third_party\LatentSync\requirements.txt | Where-Object { $_ -notmatch '^(gradio|--extra)' } | Set-Content -Encoding utf8 "$env:TEMP\vcs_sync_reqs.txt"
+  uv pip install --python $Ps -r "$env:TEMP\vcs_sync_reqs.txt"
   if ($LASTEXITCODE -ne 0) { throw "lip-sync packages failed" }
   & $Py -c "from huggingface_hub import hf_hub_download as d; [d('ByteDance/LatentSync-1.5', f, local_dir=r'third_party\LatentSync\checkpoints') for f in ('latentsync_unet.pt','whisper/tiny.pt')]"
+  Step "Fetching the cartoon mouth detector (talking animals and objects)"
+  & $Py -c "from huggingface_hub import snapshot_download as s; s('google/owlv2-base-patch16-ensemble'); s('google-t5/t5-base', allow_patterns=['*.json','*.model'])"
 }
 
 Step "Checking GPU"

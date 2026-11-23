@@ -60,6 +60,10 @@ pub struct Line {
     /// Lip-sync strength boost requested by the user (stronger guidance, more steps)
     #[serde(default)]
     pub sync_boost: bool,
+    /// Where the speaker stands in the cinematic shot [x, y, w, h] (fractions of the frame);
+    /// lets the cartoon mouth fallback find the speaker, not the listener
+    #[serde(default)]
+    pub speaker_box: Option<Vec<f64>>,
     /// Optional speaking speed for this line (e.g. 0.85 slower, 1.15 faster)
     #[serde(default)]
     pub speed: Option<f64>,
